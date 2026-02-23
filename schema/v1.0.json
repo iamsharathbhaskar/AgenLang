@@ -1,0 +1,159 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agenlang.dev/schema/v1.0.json",
+  "title": "AgenLang Contract v1.0",
+  "description": "Standardized peer-to-peer contract for secure, auditable, economically fair inter-agent communication between personal agents (OpenClaw/Amazo) and ZHC swarms. Addresses NIST CAISI gaps and OpenClaw 2026 incidents.",
+  "type": "object",
+  "properties": {
+    "agenlang_version": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "contract_id": {
+      "type": "string",
+      "pattern": "^urn:agenlang:exec:[a-f0-9]{32}$"
+    },
+    "issuer": {
+      "type": "object",
+      "properties": {
+        "agent_id": { "type": "string" },
+        "pubkey": { "type": "string" },
+        "proof": { "type": "string" }
+      },
+      "required": ["agent_id", "pubkey"]
+    },
+    "goal": { "type": "string" },
+    "intent_anchor": {
+      "type": "object",
+      "properties": {
+        "hash": { "type": "string" },
+        "user_signature": { "type": "string" }
+      },
+      "required": ["hash"]
+    },
+    "constraints": {
+      "type": "object",
+      "properties": {
+        "joule_budget": { "type": "number", "minimum": 0 },
+        "max_usd": { "type": "number", "minimum": 0 },
+        "pii_level": { "type": "string", "enum": ["none", "minimal", "gdpr_standard", "hipaa"], "default": "gdpr_standard" },
+        "ethical": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["joule_budget"]
+    },
+    "workflow": {
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["sequence", "parallel", "probabilistic"] },
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "action": { "type": "string", "enum": ["tool", "skill", "subcontract", "embed"] },
+              "target": { "type": "string" },
+              "args": { "type": "object" },
+              "on_error": { "$ref": "#/definitions/error_handler" }
+            },
+            "required": ["action", "target"]
+          }
+        },
+        "on_error": { "$ref": "#/definitions/error_handler" }
+      },
+      "required": ["type", "steps"]
+    },
+    "memory_contract": {
+      "type": "object",
+      "properties": {
+        "handoff_keys": { "type": "array", "items": { "type": "string" } },
+        "ttl": { "type": "string", "pattern": "^\\d+[smhd]$" },
+        "purge_on_complete": { "type": "boolean", "default": true },
+        "data_subject": { "type": "string" }
+      },
+      "required": ["handoff_keys", "ttl"]
+    },
+    "settlement": {
+      "type": "object",
+      "properties": {
+        "joule_recipient": { "type": "string" },
+        "rate": { "type": "number", "minimum": 0 },
+        "micro_payment_address": { "type": "string" }
+      },
+      "required": ["joule_recipient", "rate"]
+    },
+    "capability_attestations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "capability": { "type": "string" },
+          "proof": { "type": "string" },
+          "scope": { "type": "string" }
+        },
+        "required": ["capability", "proof"]
+      }
+    },
+    "ser_config": {
+      "type": "object",
+      "properties": {
+        "redaction": { "type": "string", "enum": ["none", "minimal", "gdpr_standard", "hipaa"], "default": "gdpr_standard" },
+        "replay_enabled": { "type": "boolean", "default": true }
+      }
+    },
+    "ser": {
+      "type": "object",
+      "properties": {
+        "execution_id": { "type": "string" },
+        "timestamps": {
+          "type": "object",
+          "properties": {
+            "start": { "type": "string", "format": "date-time" },
+            "end": { "type": "string", "format": "date-time" }
+          },
+          "required": ["start"]
+        },
+        "decision_points": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": { "type": "string" },
+              "location": { "type": "string" },
+              "rationale": { "type": "string" },
+              "chosen": { "type": "boolean" }
+            }
+          }
+        },
+        "resource_usage": {
+          "type": "object",
+          "properties": {
+            "joules_used": { "type": "number" },
+            "usd_cost": { "type": "number" },
+            "efficiency_score": { "type": "number" }
+          }
+        },
+        "safety_checks": {
+          "type": "object",
+          "properties": {
+            "capability_violations": { "type": "integer" },
+            "intent_anchor_verified": { "type": "boolean" }
+          }
+        },
+        "replay_ref": { "type": "string" }
+      },
+      "required": ["execution_id", "timestamps", "resource_usage"]
+    }
+  },
+  "required": ["agenlang_version", "contract_id", "issuer", "goal", "intent_anchor", "constraints", "workflow", "memory_contract", "settlement", "capability_attestations"],
+  "definitions": {
+    "error_handler": {
+      "type": "object",
+      "properties": {
+        "retry": { "type": "integer", "minimum": 0 },
+        "fallback": { "type": "string" },
+        "escalate_to": { "type": "string" },
+        "notify_intent_anchor": { "type": "boolean", "default": true }
+      }
+    }
+  }
+}
