@@ -1,0 +1,32 @@
+Metadata-Version: 2.4
+Name: agenlang
+Version: 0.1.0
+Summary: AgenLang — standardized contract substrate for secure inter-agent communication
+License: MIT
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: pydantic>=2.0
+Requires-Dist: jsonschema>=4.0
+Requires-Dist: cryptography>=42.0
+Requires-Dist: click>=8.0
+Requires-Dist: requests>=2.0
+
+# AgenLang
+
+**Shared contract substrate for secure, auditable, economically fair inter-agent communication**
+
+AgenLang is a lightweight, model-agnostic standard that lets personal agents (OpenClaw/Amazo-style) and ZHC swarms safely delegate tasks to each other.
+
+**Key features**
+- 40–110 token overhead (compressed)
+- Cryptographic capability proofs (prevents supply-chain attacks)
+- Intent anchoring (prevents goal hijacking)
+- Built-in JouleWork settlement
+- GDPR-ready memory handoff and purge
+- Full HMAC-protected Structured Execution Record (SER) with replay
+
+**Installation**
+
+```bash
+pip install agenlang          # Python (recommended for most agents)
+npm install agenlang          # JavaScript / TypeScript

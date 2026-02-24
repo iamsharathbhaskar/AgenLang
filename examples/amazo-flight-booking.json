@@ -1,0 +1,22 @@
+{
+  "agenlang_version": "1.0",
+  "contract_id": "urn:agenlang:exec:0123456789abcdef0123456789abcdef",
+  "issuer": {"agent_id": "amazo-personal-472", "pubkey": "test-pubkey"},
+  "goal": "Delegate flight booking from LAX to SFO under $150 to ZHC travel agent",
+  "intent_anchor": {"hash": "sha256:user-intent-flight-booking"},
+  "constraints": {"joule_budget": 5000},
+  "workflow": {
+    "type": "sequence",
+    "steps": [
+      {"action": "tool", "target": "web_search", "args": {"query": "cheapest flights LAX SFO 2026-02-25 under 150 USD"}},
+      {"action": "tool", "target": "summarize", "args": {"text": "dummy search results"}}
+    ]
+  },
+  "memory_contract": {"handoff_keys": ["flight_options"], "ttl": "24h", "purge_on_complete": true, "data_subject": "fridaystoned"},
+  "settlement": {"joule_recipient": "zhc-travel-agent", "rate": 12.4},
+  "capability_attestations": [
+    {"capability": "net:read", "proof": "test-proof"},
+    {"capability": "compute:read", "proof": "test-proof"}
+  ],
+  "ser_config": {}
+}
