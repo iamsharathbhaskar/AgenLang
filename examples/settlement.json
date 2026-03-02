@@ -1,0 +1,22 @@
+{
+  "agenlang_version": "1.0",
+  "contract_id": "urn:agenlang:exec:d4e5f6789012345678abcdef01234567",
+  "issuer": {"agent_id": "payment-orchestrator", "pubkey": "ecdsa-p256:base64..."},
+  "goal": "Execute paid task with JouleWork settlement to recipient",
+  "intent_anchor": {"hash": "sha256:user-intent-paid-task"},
+  "constraints": {"joule_budget": 10000, "max_usd": 2.00},
+  "workflow": {
+    "type": "sequence",
+    "steps": [
+      {"action": "tool", "target": "web_search", "args": {"query": "Helium network token price"}},
+      {"action": "tool", "target": "summarize", "args": {"text": "{{step_0_output}}"}}
+    ]
+  },
+  "memory_contract": {"handoff_keys": ["task_result"], "ttl": "24h", "purge_on_complete": true},
+  "settlement": {"joule_recipient": "worker-agent-xyz", "rate": 20.0, "micro_payment_address": "helium:14xyz..."},
+  "capability_attestations": [
+    {"capability": "net:read", "proof": "attestation-1"},
+    {"capability": "compute:read", "proof": "attestation-2"}
+  ],
+  "ser_config": {"replay_enabled": true}
+}

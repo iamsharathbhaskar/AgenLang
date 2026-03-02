@@ -1,0 +1,23 @@
+{
+  "agenlang_version": "1.0",
+  "contract_id": "urn:agenlang:exec:e5f6789012345678abcdef0123456789",
+  "issuer": {"agent_id": "a2a-gateway-agent", "pubkey": "ecdsa-p256:base64..."},
+  "goal": "Wrap AgenLang contract for A2A transport; delegate to remote agent",
+  "intent_anchor": {"hash": "sha256:user-intent-a2a-delegate"},
+  "constraints": {"joule_budget": 5000},
+  "workflow": {
+    "type": "sequence",
+    "steps": [
+      {"action": "skill", "target": "a2a:send_contract", "args": {"endpoint": "https://agent.example.com/a2a", "contract_ref": "urn:agenlang:exec:..."}},
+      {"action": "skill", "target": "a2a:await_response", "args": {"timeout_sec": 60}}
+    ]
+  },
+  "memory_contract": {"handoff_keys": ["a2a_response"], "ttl": "1h", "purge_on_complete": true},
+  "settlement": {"joule_recipient": "a2a-gateway-agent", "rate": 10.0},
+  "capability_attestations": [
+    {"capability": "net:read", "proof": "attestation-1"},
+    {"capability": "net:write", "proof": "attestation-2"},
+    {"capability": "a2a:transport", "proof": "attestation-3"}
+  ],
+  "ser_config": {"redaction": "minimal", "replay_enabled": true}
+}

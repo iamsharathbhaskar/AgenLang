@@ -1,0 +1,22 @@
+{
+  "agenlang_version": "1.0",
+  "contract_id": "urn:agenlang:exec:a1b2c3d4e5f6789012345678abcdef01",
+  "issuer": {"agent_id": "research-agent-001", "pubkey": "ecdsa-p256:base64..."},
+  "goal": "Research latest NIST AI guidelines and summarize key points",
+  "intent_anchor": {"hash": "sha256:user-intent-research-nist"},
+  "constraints": {"joule_budget": 3000, "max_usd": 0.50},
+  "workflow": {
+    "type": "sequence",
+    "steps": [
+      {"action": "tool", "target": "web_search", "args": {"query": "NIST AI risk management framework 2025"}},
+      {"action": "tool", "target": "summarize", "args": {"text": "{{step_0_output}}"}}
+    ]
+  },
+  "memory_contract": {"handoff_keys": ["research_summary"], "ttl": "1h", "purge_on_complete": true, "data_subject": "researcher"},
+  "settlement": {"joule_recipient": "research-agent-001", "rate": 8.0},
+  "capability_attestations": [
+    {"capability": "net:read", "proof": "attestation-1"},
+    {"capability": "compute:read", "proof": "attestation-2"}
+  ],
+  "ser_config": {"redaction": "minimal", "replay_enabled": true}
+}

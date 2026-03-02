@@ -1,20 +1,52 @@
 [project]
 name = "agenlang"
-version = "0.1.0"
+version = "0.2.0"
 description = "AgenLang — standardized contract substrate for secure inter-agent communication"
 readme = "README.md"
-license = {text = "MIT"}
-requires-python = ">=3.11"
+license = {text = "Apache-2.0"}
+requires-python = ">=3.12"
 dependencies = [
   "pydantic>=2.0",
   "jsonschema>=4.0",
   "cryptography>=42.0",
   "click>=8.0",
-  "requests>=2.0"
+  "requests>=2.0",
+  "structlog>=24.0",
+  "tavily-python>=0.5"
 ]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "pytest-cov>=4.0",
+  "hypothesis>=6.0",
+  "mypy>=1.0",
+  "ruff>=0.0",
+  "black>=24.0"
+]
+
+[tool.pytest.ini_options]
+addopts = "-v --tb=short"
+testpaths = ["tests"]
+filterwarnings = ["ignore:datetime.utcnow"]
+
+[tool.coverage.run]
+source = ["src/agenlang"]
+omit = ["*/tests/*"]
+fail_under = 85
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W"]
 
 [project.scripts]
 agenlang = "agenlang.cli:main"
+
+[tool.setuptools.package-data]
+agenlang = ["schema/*.json"]
 
 [build-system]
 requires = ["setuptools>=45", "wheel"]

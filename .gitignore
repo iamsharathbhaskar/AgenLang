@@ -5,3 +5,6 @@ __pycache__/
 *.replay
 *.ser.json
 .DS_Store
+*.egg-info/
+.coverage
+.hypothesis/
