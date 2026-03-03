@@ -21,7 +21,7 @@
 ## Do Not (non-negotiable)
 
 - Never use dummy tools, hardcoded joules=42, or fake settlement.
-- Never ship without 90%+ test coverage and passing security tests.
+- Never ship without 95%+ test coverage and passing security tests.
 - Never claim JavaScript support until the npm package exists.
 - Never introduce new dependencies without explicit approval.
 - All crypto must be ECDSA + proper key management; no naive HMAC-only.
@@ -34,4 +34,4 @@ Before merging any change, answer:
 1. **Is this change cryptographically sound?**
 2. **Does it advance standards compliance?**
 
-See [PROTOCOL.md](PROTOCOL.md) for phased execution and verification steps.
+PROTOCOL.md is internal and not committed to the repository.

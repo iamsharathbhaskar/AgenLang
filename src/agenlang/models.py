@@ -1,6 +1,7 @@
 """Pydantic v2 models mirroring schema/v1.0.json.
 
 Full nested models for type-safe contract validation and serialization.
+Includes root Contract model and SER output.
 """
 
 from typing import Any, Literal, Optional
@@ -62,7 +63,7 @@ class MemoryContract(BaseModel):
     """Memory handoff and purge configuration."""
 
     handoff_keys: list[str]
-    ttl: str  # pattern \d+[smhd]
+    ttl: str
     purge_on_complete: bool = True
     data_subject: Optional[str] = None
 
@@ -97,27 +98,63 @@ class SerTimestamps(BaseModel):
     end: Optional[str] = None
 
 
+class DecisionPoint(BaseModel):
+    """SER decision point record."""
+
+    type: Optional[str] = None
+    location: Optional[str] = None
+    rationale: Optional[str] = None
+    chosen: Optional[bool] = None
+
+
 class SerResourceUsage(BaseModel):
     """SER resource usage."""
 
-    joules_used: Optional[float] = None
-    usd_cost: Optional[float] = None
-    efficiency_score: Optional[float] = None
+    joules_used: float = 0.0
+    usd_cost: float = 0.0
+    efficiency_score: float = 0.0
 
 
 class SerSafetyChecks(BaseModel):
     """SER safety checks."""
 
-    capability_violations: Optional[int] = None
-    intent_anchor_verified: Optional[bool] = None
+    capability_violations: int = 0
+    intent_anchor_verified: bool = False
+
+
+class SettlementReceipt(BaseModel):
+    """Settlement receipt in SER."""
+
+    joule_recipient: str
+    rate: float
+    total_joules_owed: float
 
 
 class Ser(BaseModel):
-    """Structured Execution Record."""
+    """Structured Execution Record (output)."""
 
     execution_id: str
     timestamps: SerTimestamps
     resource_usage: SerResourceUsage
-    decision_points: list[dict[str, Any]] = Field(default_factory=list)
-    safety_checks: Optional[SerSafetyChecks] = None
+    decision_points: list[DecisionPoint] = Field(default_factory=list)
+    safety_checks: SerSafetyChecks = Field(default_factory=SerSafetyChecks)
     replay_ref: Optional[str] = None
+    reputation_score: float = 0.0
+    settlement_receipt: Optional[SettlementReceipt] = None
+
+
+class ContractModel(BaseModel):
+    """Root AgenLang v1.0 Contract model (full schema)."""
+
+    agenlang_version: str = "1.0"
+    contract_id: str
+    issuer: Issuer
+    goal: str
+    intent_anchor: IntentAnchor
+    constraints: Constraints
+    workflow: Workflow
+    memory_contract: MemoryContract
+    settlement: Settlement
+    capability_attestations: list[CapabilityAttestation]
+    ser_config: SerConfig = Field(default_factory=SerConfig)
+    ser: Optional[Ser] = None

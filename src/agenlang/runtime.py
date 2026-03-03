@@ -12,7 +12,7 @@ from cryptography.hazmat.primitives.hashes import SHA256
 
 from .contract import Contract
 from .keys import KeyManager
-from .memory import SQLiteMemoryBackend
+from .memory import EncryptedMemoryBackend
 from .tools import TOOLS
 
 log = structlog.get_logger()
@@ -45,8 +45,8 @@ class Runtime:
         self._recursion_depth = 0
         self._max_recursion = 10
         self.replay_data: list[dict[str, Any]] = []  # Raw data for replay file
-        # SQLite default for memory (production)
-        self.memory: Any = SQLiteMemoryBackend(
+        # Encrypted memory default (production)
+        self.memory: Any = EncryptedMemoryBackend(
             self.execution_id,
             contract.memory_contract.data_subject or "anonymous",
         )
@@ -74,16 +74,19 @@ class Runtime:
             self._execute_step_with_error_handler(step)
             self.steps_executed += 1
 
-        # Handoff memory
+        # Handoff real step outputs (whitelisted by memory_contract keys)
+        step_outputs = {}
+        for entry in self.replay_data:
+            step_outputs[entry["step"]] = entry.get("output", "")
         self.memory.handoff(
             self.contract.memory_contract.handoff_keys,
-            {"example_key": "example_value"},
+            step_outputs,
         )
 
         result = {
             "status": "success",
             "output": f"Executed goal: {self.contract.goal}",
-            "steps_completed": self.steps_executed
+            "steps_completed": self.steps_executed,
         }
 
         end_time = datetime.now(timezone.utc)
@@ -92,17 +95,17 @@ class Runtime:
             "execution_id": self.execution_id,
             "timestamps": {
                 "start": self.start_time.isoformat() + "Z",
-                "end": end_time.isoformat() + "Z"
+                "end": end_time.isoformat() + "Z",
             },
             "decision_points": [],
             "resource_usage": {
                 "joules_used": joules_used,
                 "usd_cost": joules_used * 0.0001,  # Approximate USD per joule
-                "efficiency_score": 0.92
+                "efficiency_score": self._compute_efficiency(joules_used),
             },
             "safety_checks": {
                 "capability_violations": 0,
-                "intent_anchor_verified": True
+                "intent_anchor_verified": True,
             },
             "replay_ref": f"{self.execution_id}.replay",
             "reputation_score": self._compute_reputation_score(joules_used),
@@ -110,7 +113,7 @@ class Runtime:
                 "joule_recipient": self.contract.settlement.joule_recipient,
                 "rate": self.contract.settlement.rate,
                 "total_joules_owed": joules_used * self.contract.settlement.rate,
-            }
+            },
         }
 
         # Save replay file with HMAC integrity
@@ -129,6 +132,13 @@ class Runtime:
             return 0.0
         efficiency = 1.0 - (joules_used / budget)
         return max(0.0, min(1.0, 0.5 + efficiency * 0.5))
+
+    def _compute_efficiency(self, joules_used: float) -> float:
+        """Compute efficiency score based on budget utilization."""
+        budget = self.contract.constraints.joule_budget
+        if budget <= 0:
+            return 0.0
+        return max(0.0, min(1.0, 1.0 - (joules_used / budget)))
 
     def _execute_step_with_error_handler(self, step: Any) -> None:
         """Execute step with on_error retry/fallback."""
@@ -171,7 +181,9 @@ class Runtime:
                 tool = TOOLS.get(target)
                 if tool:
                     required_caps = tool["capabilities"]
-                    attested = [c.capability for c in self.contract.capability_attestations]
+                    attested = [
+                        c.capability for c in self.contract.capability_attestations
+                    ]
                     if all(cap in attested for cap in required_caps):
                         output = tool["function"](args)
                         joule_cost = tool.get("joule_cost", 100.0)
@@ -199,13 +211,17 @@ class Runtime:
         finally:
             self._recursion_depth -= 1
 
-    def _save_replay(self) -> None:
-        """Save replay data with HMAC integrity."""
-        replay_content = json.dumps(self.replay_data).encode("utf-8")
+    def _get_key_manager(self) -> KeyManager:
+        """Get key manager, using injected or default."""
         if self._key_manager:
-            key = self._key_manager.get_ser_key()
-        else:
-            key = KeyManager().get_ser_key()  # Use default path for verifiability
+            return self._key_manager
+        return KeyManager()
+
+    def _save_replay(self) -> None:
+        """Save replay data with HMAC integrity using KeyManager."""
+        replay_content = json.dumps(self.replay_data).encode("utf-8")
+        km = self._get_key_manager()
+        key = km.get_ser_key()
         h = hmac_mod.HMAC(key, SHA256(), backend=default_backend())
         h.update(replay_content)
         hmac_value = h.finalize()

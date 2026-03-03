@@ -57,9 +57,11 @@ class KeyManager:
         if not self._key_path.exists():
             return None
         pem = self._key_path.read_bytes()
-        self._private_key = serialization.load_pem_private_key(
+        loaded = serialization.load_pem_private_key(
             pem, password=None, backend=default_backend()
         )
+        assert isinstance(loaded, ec.EllipticCurvePrivateKey)
+        self._private_key = loaded
         return self._private_key
 
     def get_or_create(self) -> ec.EllipticCurvePrivateKey:
@@ -110,9 +112,12 @@ class KeyManager:
         """
         from cryptography.exceptions import InvalidSignature
 
-        pub = serialization.load_pem_public_key(public_key_pem, backend=default_backend())
+        loaded_pub = serialization.load_pem_public_key(
+            public_key_pem, backend=default_backend()
+        )
+        assert isinstance(loaded_pub, ec.EllipticCurvePublicKey)
         try:
-            pub.verify(signature, data, ec.ECDSA(hashes.SHA256()))
+            loaded_pub.verify(signature, data, ec.ECDSA(hashes.SHA256()))
             return True
         except InvalidSignature:
             return False

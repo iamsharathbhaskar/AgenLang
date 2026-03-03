@@ -1,6 +1,6 @@
 [project]
 name = "agenlang"
-version = "0.2.0"
+version = "0.3.0"
 description = "AgenLang — standardized contract substrate for secure inter-agent communication"
 readme = "README.md"
 license = {text = "Apache-2.0"}
@@ -21,7 +21,7 @@ dev = [
   "pytest-cov>=4.0",
   "hypothesis>=6.0",
   "mypy>=1.0",
-  "ruff>=0.0",
+  "ruff>=0.5",
   "black>=24.0"
 ]
 
@@ -33,7 +33,9 @@ filterwarnings = ["ignore:datetime.utcnow"]
 [tool.coverage.run]
 source = ["src/agenlang"]
 omit = ["*/tests/*"]
-fail_under = 85
+
+[tool.coverage.report]
+fail_under = 95
 
 [tool.ruff]
 target-version = "py312"

@@ -31,6 +31,7 @@ def test_summarize_requires_api_key() -> None:
 
 def test_register_tool() -> None:
     """register_tool adds custom tool."""
+
     def _custom(args):
         return str(args.get("x", 0))
 

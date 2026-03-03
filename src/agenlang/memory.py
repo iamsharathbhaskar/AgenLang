@@ -126,8 +126,7 @@ class SQLiteMemoryBackend:
     def _conn(self) -> sqlite3.Connection:
         conn = sqlite3.connect(str(self._db_path))
         conn.execute(
-            "CREATE TABLE IF NOT EXISTS memory "
-            "(key TEXT PRIMARY KEY, value TEXT)"
+            "CREATE TABLE IF NOT EXISTS memory " "(key TEXT PRIMARY KEY, value TEXT)"
         )
         return conn
 

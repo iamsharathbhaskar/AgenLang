@@ -17,8 +17,7 @@ def _web_search_tavily(args: Dict[str, Any]) -> str:
     api_key = os.environ.get("TAVILY_API_KEY")
     if not api_key:
         raise ValueError(
-            "TAVILY_API_KEY required for web_search. "
-            "Get one at https://tavily.com"
+            "TAVILY_API_KEY required for web_search. " "Get one at https://tavily.com"
         )
     from tavily import TavilyClient
 
@@ -29,8 +28,7 @@ def _web_search_tavily(args: Dict[str, Any]) -> str:
     if not results:
         return "No results found."
     return "\n".join(
-        f"- {r.get('title', '')}: {r.get('content', '')[:200]}..."
-        for r in results[:5]
+        f"- {r.get('title', '')}: {r.get('content', '')[:200]}..." for r in results[:5]
     )
 
 
@@ -39,10 +37,9 @@ def _summarize_grok(args: Dict[str, Any]) -> str:
     api_key = os.environ.get("XAI_API_KEY")
     if not api_key:
         raise ValueError(
-            "XAI_API_KEY required for summarize. "
-            "Get one at https://console.x.ai"
+            "XAI_API_KEY required for summarize. " "Get one at https://console.x.ai"
         )
-    import requests
+    import requests  # type: ignore[import-untyped]
 
     text = args.get("text", "")
     resp = requests.post(

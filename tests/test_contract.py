@@ -1,5 +1,9 @@
-"""Tests for contract validation and hypothesis fuzzing."""
+# Copyright 2024 AgenLang Contributors
+# SPDX-License-Identifier: Apache-2.0
 
+"""Tests for contract validation, serialization, and hypothesis fuzzing."""
+
+import json
 import tempfile
 from pathlib import Path
 
@@ -30,6 +34,43 @@ def test_contract_invalid_schema_raises() -> None:
         Path(path).unlink()
 
 
+def test_contract_to_json() -> None:
+    """to_json produces valid JSON roundtrip."""
+    c = Contract.from_file("examples/amazo-flight-booking.json")
+    j = c.to_json()
+    data = json.loads(j)
+    assert data["contract_id"] == c.contract_id
+    assert data["goal"] == c.goal
+
+
+def test_contract_from_dict() -> None:
+    """from_dict validates and loads."""
+    data = json.loads(Path("examples/amazo-flight-booking.json").read_text())
+    c = Contract.from_dict(data)
+    assert c.contract_id == data["contract_id"]
+
+
+def test_contract_verify_no_proof() -> None:
+    """verify_signature returns False when no proof."""
+    c = Contract.from_file("examples/amazo-flight-booking.json")
+    assert c.verify_signature() is False
+
+
+def test_contract_verify_bad_proof() -> None:
+    """verify_signature returns False for invalid base64 proof."""
+    c = Contract.from_file("examples/amazo-flight-booking.json")
+    c.issuer.proof = "not-valid-base64!!!"
+    assert c.verify_signature() is False
+
+
+def test_all_example_contracts_load() -> None:
+    """All example contracts in examples/ load successfully."""
+    examples_dir = Path("examples")
+    for f in examples_dir.glob("*.json"):
+        c = Contract.from_file(str(f))
+        assert c.contract_id
+
+
 @given(
     goal=st.text(min_size=1, max_size=200),
     joule_budget=st.floats(min_value=1, max_value=100000),
@@ -48,7 +89,9 @@ def test_contract_fuzz_valid(goal: str, joule_budget: float) -> None:
         "constraints": {"joule_budget": joule_budget},
         "workflow": {
             "type": "sequence",
-            "steps": [{"action": "tool", "target": "web_search", "args": {"query": "test"}}],
+            "steps": [
+                {"action": "tool", "target": "web_search", "args": {"query": "test"}}
+            ],
         },
         "memory_contract": {"handoff_keys": [], "ttl": "1h"},
         "settlement": {"joule_recipient": "r", "rate": 1.0},

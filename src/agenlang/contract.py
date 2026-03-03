@@ -114,8 +114,12 @@ class Contract(BaseModel):
         """Build canonical JSON payload for signing (excludes issuer.proof)."""
         payload = self.model_dump()
         if "issuer" in payload and isinstance(payload["issuer"], dict):
-            payload["issuer"] = {k: v for k, v in payload["issuer"].items() if k != "proof"}
-        return json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+            payload["issuer"] = {
+                k: v for k, v in payload["issuer"].items() if k != "proof"
+            }
+        return json.dumps(payload, sort_keys=True, separators=(",", ":")).encode(
+            "utf-8"
+        )
 
     def sign(self, key_manager: "KeyManager") -> None:
         """Sign contract with KeyManager. Sets issuer.pubkey and issuer.proof.
@@ -157,7 +161,20 @@ class Contract(BaseModel):
         if "\\n" in pubkey_str:
             pubkey_str = pubkey_str.replace("\\n", "\n")
         pubkey_pem = pubkey_str.encode("utf-8")
-        from .keys import KeyManager
 
-        km = KeyManager()
-        return km.verify(self._canonical_payload(), signature, pubkey_pem)
+        from cryptography.exceptions import InvalidSignature
+        from cryptography.hazmat.backends import default_backend
+        from cryptography.hazmat.primitives import hashes, serialization
+        from cryptography.hazmat.primitives.asymmetric import ec
+
+        try:
+            loaded_pub = serialization.load_pem_public_key(
+                pubkey_pem, backend=default_backend()
+            )
+            assert isinstance(loaded_pub, ec.EllipticCurvePublicKey)
+            loaded_pub.verify(
+                signature, self._canonical_payload(), ec.ECDSA(hashes.SHA256())
+            )
+            return True
+        except (InvalidSignature, Exception):
+            return False

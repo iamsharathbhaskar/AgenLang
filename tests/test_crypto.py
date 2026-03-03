@@ -2,12 +2,16 @@
 
 from pathlib import Path
 
+from hypothesis import given
+from hypothesis import strategies as st
+
 from agenlang.contract import Contract
 from agenlang.keys import KeyManager
 
+EXAMPLES_DIR = Path(__file__).parent.parent / "examples"
+
 
 def test_key_manager_generate_and_load(tmp_path: Path) -> None:
-    """KeyManager generates and persists key."""
     km = KeyManager(key_path=tmp_path / "keys.pem")
     key1 = km.generate()
     assert key1 is not None
@@ -16,7 +20,6 @@ def test_key_manager_generate_and_load(tmp_path: Path) -> None:
 
 
 def test_key_manager_sign_verify(tmp_path: Path) -> None:
-    """KeyManager sign and verify roundtrip."""
     km = KeyManager(key_path=tmp_path / "keys.pem")
     km.generate()
     data = b"test payload"
@@ -26,7 +29,6 @@ def test_key_manager_sign_verify(tmp_path: Path) -> None:
 
 
 def test_key_manager_verify_tampering_fails(tmp_path: Path) -> None:
-    """Tampered data fails verification."""
     km = KeyManager(key_path=tmp_path / "keys.pem")
     km.generate()
     data = b"original"
@@ -36,27 +38,24 @@ def test_key_manager_verify_tampering_fails(tmp_path: Path) -> None:
 
 
 def test_contract_sign_verify(tmp_path: Path) -> None:
-    """Contract sign and verify_signature roundtrip."""
     km = KeyManager(key_path=tmp_path / "keys.pem")
     km.generate()
-    contract = Contract.from_file("examples/amazo-flight-booking.json")
+    contract = Contract.from_file(str(EXAMPLES_DIR / "amazo-flight-booking.json"))
     contract.sign(km)
     assert contract.issuer.proof is not None
     assert contract.verify_signature() is True
 
 
 def test_contract_verify_tampering_fails(tmp_path: Path) -> None:
-    """Tampered contract fails verify_signature."""
     km = KeyManager(key_path=tmp_path / "keys.pem")
     km.generate()
-    contract = Contract.from_file("examples/amazo-flight-booking.json")
+    contract = Contract.from_file(str(EXAMPLES_DIR / "amazo-flight-booking.json"))
     contract.sign(km)
     contract.goal = "tampered goal"
     assert contract.verify_signature() is False
 
 
 def test_ser_key_persistent(tmp_path: Path) -> None:
-    """SER key is persistent across KeyManager instances."""
     km1 = KeyManager(key_path=tmp_path / "keys.pem")
     key1 = km1.get_ser_key()
     km2 = KeyManager(key_path=tmp_path / "keys.pem")
@@ -65,8 +64,20 @@ def test_ser_key_persistent(tmp_path: Path) -> None:
     assert len(key1) == 32
 
 
+def test_key_rotation(tmp_path: Path) -> None:
+    """Key rotation: new key invalidates old signatures."""
+    km = KeyManager(key_path=tmp_path / "keys.pem")
+    km.generate()
+    contract = Contract.from_file(str(EXAMPLES_DIR / "amazo-flight-booking.json"))
+    contract.sign(km)
+    assert contract.verify_signature() is True
+    km.generate()  # rotate key
+    contract2 = Contract.from_file(str(EXAMPLES_DIR / "amazo-flight-booking.json"))
+    contract2.sign(km)
+    assert contract2.verify_signature() is True
+
+
 def test_verify_replay_hmac() -> None:
-    """KeyManager.verify_replay_hmac validates HMAC."""
     import secrets
 
     from cryptography.hazmat.backends import default_backend
@@ -80,3 +91,27 @@ def test_verify_replay_hmac() -> None:
     hmac_val = h.finalize()
     assert KeyManager.verify_replay_hmac(content, hmac_val, key) is True
     assert KeyManager.verify_replay_hmac(content, b"x" * 32, key) is False
+
+
+@given(data=st.binary(min_size=1, max_size=500))
+def test_sign_verify_hypothesis(data: bytes, tmp_path_factory) -> None:
+    """Hypothesis: sign/verify roundtrip for arbitrary data."""
+    tmp = tmp_path_factory.mktemp("keys")
+    km = KeyManager(key_path=tmp / "keys.pem")
+    km.generate()
+    sig = km.sign(data)
+    pubkey = km.get_public_key_pem()
+    assert km.verify(data, sig, pubkey) is True
+
+
+@given(tamper=st.binary(min_size=1, max_size=100))
+def test_tampered_data_fails_hypothesis(tamper: bytes, tmp_path_factory) -> None:
+    """Hypothesis: tampered data always fails verification."""
+    tmp = tmp_path_factory.mktemp("keys")
+    km = KeyManager(key_path=tmp / "keys.pem")
+    km.generate()
+    original = b"original data for signing"
+    sig = km.sign(original)
+    pubkey = km.get_public_key_pem()
+    if tamper != original:
+        assert km.verify(tamper, sig, pubkey) is False
