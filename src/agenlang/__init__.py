@@ -1,3 +1,3 @@
 """AgenLang — standardized contract substrate for secure inter-agent communication."""
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"

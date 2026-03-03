@@ -183,3 +183,52 @@ def test_runtime_no_key_manager(tmp_path: Path) -> None:
     runtime = Runtime(contract)
     result, ser = runtime.execute()
     assert result["status"] == "success"
+
+
+def test_runtime_probabilistic_workflow(tmp_path: Path) -> None:
+    """Probabilistic workflow: only one step runs, decision_point recorded."""
+    from unittest.mock import patch
+
+    km = KeyManager(key_path=tmp_path / "keys.pem")
+    km.generate()
+    contract = Contract.from_file(str(EXAMPLES_DIR / "probabilistic.json"))
+    assert contract.workflow.type == "probabilistic"
+    assert len(contract.workflow.steps) == 2
+
+    # Force first step (web_search) to be chosen
+    with patch("agenlang.runtime.random.choice", side_effect=lambda s: s[0]):
+        runtime = Runtime(contract, key_manager=km)
+        result, ser = runtime.execute()
+
+    assert result["status"] == "success"
+    assert result["steps_completed"] == 1
+    assert ser["resource_usage"]["joules_used"] == 150.0  # web_search cost
+    assert len(ser["decision_points"]) == 1
+    assert ser["decision_points"][0]["type"] == "probabilistic_choice"
+    assert ser["decision_points"][0]["chosen"] is True
+
+
+def test_runtime_probabilistic_empty_steps(tmp_path: Path) -> None:
+    """Probabilistic workflow with no steps raises."""
+    km = KeyManager(key_path=tmp_path / "keys.pem")
+    km.generate()
+    contract = Contract.from_file(str(EXAMPLES_DIR / "probabilistic.json"))
+    contract.workflow.steps = []
+    runtime = Runtime(contract, key_manager=km)
+    with pytest.raises(
+        ValueError, match="Probabilistic workflow requires at least one step"
+    ):
+        runtime.execute()
+
+
+def test_runtime_unknown_workflow_type(tmp_path: Path) -> None:
+    """Unknown workflow type raises."""
+    km = KeyManager(key_path=tmp_path / "keys.pem")
+    km.generate()
+    contract = Contract.from_file(str(EXAMPLES_DIR / "amazo-flight-booking.json"))
+    object.__setattr__(
+        contract.workflow, "type", "unknown"
+    )  # bypass Pydantic validation
+    runtime = Runtime(contract, key_manager=km)
+    with pytest.raises(ValueError, match="Unknown workflow type"):
+        runtime.execute()

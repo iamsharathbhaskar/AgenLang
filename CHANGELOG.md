@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.3.1] — 2026-03-03
+
+### Added
+- Probabilistic workflow execution: `random.choice` selects one step, records decision_point in SER
+- `HeliumBackend` with HTTP API skeleton (stub mode via `api_url="stub:"`, real POST with try/except)
+- Bandit security scan job in CI
+- `examples/probabilistic.json` contract
+- Tests for probabilistic runtime, HeliumBackend stub/error/success paths
+
+### Changed
+- `HeliumStubBackend` now subclasses `HeliumBackend` with `api_url="stub:"`
+- `StubSettlementBackend` and `HeliumBackend` use structlog
+- Runtime `execute()` dispatches on `workflow.type` (sequence, parallel, probabilistic)
+
+### Fixed
+- Bandit B311 (random) skipped for workflow choice; B101 (assert) skipped
+
 ## [0.3.0] — 2026-03-03
 
 ### Added

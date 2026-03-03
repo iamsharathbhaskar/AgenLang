@@ -1,6 +1,7 @@
 """AgenLang Runtime - executes contracts with safety, audit, and settlement."""
 
 import json
+import random
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
@@ -45,6 +46,7 @@ class Runtime:
         self._recursion_depth = 0
         self._max_recursion = 10
         self.replay_data: list[dict[str, Any]] = []  # Raw data for replay file
+        self._decision_points: list[dict[str, Any]] = []  # For probabilistic workflows
         # Encrypted memory default (production)
         self.memory: Any = EncryptedMemoryBackend(
             self.execution_id,
@@ -67,12 +69,40 @@ class Runtime:
         loaded_memory = self.memory.load()
         log.debug("memory_loaded", memory=loaded_memory)
 
-        # Execute each step in the workflow (with on_error support)
-        for step in self.contract.workflow.steps:
+        # Execute steps based on workflow type
+        workflow_type = self.contract.workflow.type
+        steps = self.contract.workflow.steps
+
+        if workflow_type == "sequence" or workflow_type == "parallel":
+            if workflow_type == "parallel":
+                log.info(
+                    "workflow_parallel",
+                    note="parallel execution not yet implemented; running sequentially",
+                )
+            for step in steps:
+                if self._joules_used >= self.contract.constraints.joule_budget:
+                    raise ValueError("Joule budget exhausted")
+                self._execute_step_with_error_handler(step)
+                self.steps_executed += 1
+        elif workflow_type == "probabilistic":
+            if not steps:
+                raise ValueError("Probabilistic workflow requires at least one step")
+            step = random.choice(steps)
+            step_idx = steps.index(step)
+            self._decision_points.append(
+                {
+                    "type": "probabilistic_choice",
+                    "location": f"step_{step_idx}",
+                    "rationale": "random.choice",
+                    "chosen": True,
+                }
+            )
             if self._joules_used >= self.contract.constraints.joule_budget:
                 raise ValueError("Joule budget exhausted")
             self._execute_step_with_error_handler(step)
             self.steps_executed += 1
+        else:
+            raise ValueError(f"Unknown workflow type: {workflow_type}")
 
         # Handoff real step outputs (whitelisted by memory_contract keys)
         step_outputs = {}
@@ -97,7 +127,7 @@ class Runtime:
                 "start": self.start_time.isoformat() + "Z",
                 "end": end_time.isoformat() + "Z",
             },
-            "decision_points": [],
+            "decision_points": self._decision_points,
             "resource_usage": {
                 "joules_used": joules_used,
                 "usd_cost": joules_used * 0.0001,  # Approximate USD per joule
