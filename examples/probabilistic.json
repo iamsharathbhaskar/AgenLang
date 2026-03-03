@@ -8,8 +8,8 @@
   "workflow": {
     "type": "probabilistic",
     "steps": [
-      {"action": "tool", "target": "web_search", "args": {"query": "probabilistic test query"}},
-      {"action": "tool", "target": "summarize", "args": {"text": "dummy text for summarization"}}
+      {"action": "tool", "target": "web_search", "args": {"query": "probabilistic test query"}, "weight": 0.7},
+      {"action": "tool", "target": "summarize", "args": {"text": "dummy text for summarization"}, "weight": 0.3}
     ]
   },
   "memory_contract": {"handoff_keys": [], "ttl": "1h", "purge_on_complete": true, "data_subject": "anonymous"},

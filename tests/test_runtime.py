@@ -186,7 +186,7 @@ def test_runtime_no_key_manager(tmp_path: Path) -> None:
 
 
 def test_runtime_probabilistic_workflow(tmp_path: Path) -> None:
-    """Probabilistic workflow: only one step runs, decision_point recorded."""
+    """Probabilistic workflow: weighted selection, per-step decision points."""
     from unittest.mock import patch
 
     km = KeyManager(key_path=tmp_path / "keys.pem")
@@ -195,17 +195,19 @@ def test_runtime_probabilistic_workflow(tmp_path: Path) -> None:
     assert contract.workflow.type == "probabilistic"
     assert len(contract.workflow.steps) == 2
 
-    # Force first step (web_search) to be chosen
-    with patch("agenlang.runtime.random.choice", side_effect=lambda s: s[0]):
+    with patch(
+        "agenlang.runtime.random.choices", return_value=[contract.workflow.steps[0]]
+    ):
         runtime = Runtime(contract, key_manager=km)
         result, ser = runtime.execute()
 
     assert result["status"] == "success"
     assert result["steps_completed"] == 1
-    assert ser["resource_usage"]["joules_used"] == 150.0  # web_search cost
-    assert len(ser["decision_points"]) == 1
-    assert ser["decision_points"][0]["type"] == "probabilistic_choice"
-    assert ser["decision_points"][0]["chosen"] is True
+    assert ser["resource_usage"]["joules_used"] == 150.0
+    assert len(ser["decision_points"]) == 2
+    chosen = [dp for dp in ser["decision_points"] if dp["chosen"]]
+    assert len(chosen) == 1
+    assert chosen[0]["location"] == "step_0"
 
 
 def test_runtime_probabilistic_empty_steps(tmp_path: Path) -> None:
@@ -232,3 +234,71 @@ def test_runtime_unknown_workflow_type(tmp_path: Path) -> None:
     runtime = Runtime(contract, key_manager=km)
     with pytest.raises(ValueError, match="Unknown workflow type"):
         runtime.execute()
+
+
+def test_runtime_parallel_workflow(tmp_path: Path) -> None:
+    """Parallel workflow runs all steps with branch decision points."""
+    km = KeyManager(key_path=tmp_path / "keys.pem")
+    km.generate()
+    contract = Contract.from_file(str(EXAMPLES_DIR / "amazo-flight-booking.json"))
+    object.__setattr__(contract.workflow, "type", "parallel")
+    runtime = Runtime(contract, key_manager=km)
+    result, ser = runtime.execute()
+    assert result["status"] == "success"
+    assert result["steps_completed"] == 2
+    branches = [dp for dp in ser["decision_points"] if dp["type"] == "parallel_branch"]
+    assert len(branches) == 2
+
+
+def test_runtime_weighted_probabilistic(tmp_path: Path) -> None:
+    """Weighted probabilistic uses step weights."""
+    from unittest.mock import patch
+
+    km = KeyManager(key_path=tmp_path / "keys.pem")
+    km.generate()
+    contract = Contract.from_file(str(EXAMPLES_DIR / "probabilistic.json"))
+    assert contract.workflow.steps[0].weight == 0.7
+    assert contract.workflow.steps[1].weight == 0.3
+
+    with patch("agenlang.runtime.random.choices") as mock_choices:
+        mock_choices.return_value = [contract.workflow.steps[1]]
+        runtime = Runtime(contract, key_manager=km)
+        result, ser = runtime.execute()
+
+    mock_choices.assert_called_once()
+    call_kwargs = mock_choices.call_args
+    assert call_kwargs.kwargs["weights"] == [0.7, 0.3]
+    assert result["steps_completed"] == 1
+
+
+def test_runtime_conditional_skip(tmp_path: Path) -> None:
+    """Sequence step with unresolved {{step_N_output}} is skipped."""
+    km = KeyManager(key_path=tmp_path / "keys.pem")
+    km.generate()
+    contract = Contract.from_file(str(EXAMPLES_DIR / "amazo-flight-booking.json"))
+    contract.workflow.steps[1].args = {"text": "{{step_5_output}}"}
+    runtime = Runtime(contract, key_manager=km)
+    result, ser = runtime.execute()
+    assert result["steps_completed"] == 1
+    skips = [dp for dp in ser["decision_points"] if dp["type"] == "conditional_skip"]
+    assert len(skips) == 1
+
+
+def test_runtime_protocol_dispatch(tmp_path: Path) -> None:
+    """Protocol auto-detect routes to adapter dispatch."""
+    from unittest.mock import MagicMock, patch
+
+    km = KeyManager(key_path=tmp_path / "keys.pem")
+    km.generate()
+    contract = Contract.from_file(str(EXAMPLES_DIR / "amazo-flight-booking.json"))
+    contract.workflow.steps = [contract.workflow.steps[0]]
+    contract.workflow.steps[0].target = "fipa:test-agent"
+
+    mock_mod = MagicMock()
+    mock_mod.dispatch.return_value = '{"status": "ok"}'
+    with patch("importlib.import_module", return_value=mock_mod):
+        runtime = Runtime(contract, key_manager=km)
+        result, ser = runtime.execute()
+
+    assert result["status"] == "success"
+    mock_mod.dispatch.assert_called_once()

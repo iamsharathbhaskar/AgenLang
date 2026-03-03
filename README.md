@@ -14,6 +14,9 @@ AgenLang is a lightweight, model-agnostic standard that lets personal agents (Op
 - AES-GCM encrypted memory with GDPR-ready handoff and purge
 - Full HMAC-protected Structured Execution Record (SER) with replay
 - A2A transport wrapper (JSON-RPC and SSE)
+- Protocol adapters: ACP, MCP, FIPA, AG-UI, ANP, W3C DID, OASF
+- Weighted probabilistic workflow execution
+- NIST-aligned threat model
 
 **Installation**
 
@@ -103,6 +106,30 @@ Token overhead: <80 tokens when compressed.
 | SER integrity | HMAC-SHA256 | N/A |
 | Reputation scoring | Built-in | N/A |
 
+**Protocol Compatibility**
+
+AgenLang integrates with all major agent communication protocols:
+
+| Protocol | Adapter | Integration |
+|----------|---------|-------------|
+| A2A | `a2a.py` | JSON-RPC 2.0 + SSE transport |
+| ACP | `acp.py` | REST message envelopes |
+| MCP | `mcp.py` | Tool registration (JSON-RPC) |
+| FIPA | `fipa.py` | ACL performative mapping |
+| AG-UI | `agui.py` | SER lifecycle event streaming |
+| ANP | `anp.py` | DID-based P2P contract exchange |
+| W3C DID | `w3c.py` | DID:web + DID:key identity |
+| OASF | `oasf.py` | Schema manifest generation |
+
+Use protocol prefixes in workflow steps for auto-dispatch:
+
+```json
+{"action": "subcontract", "target": "acp:https://remote-agent.example.com/acp"}
+{"action": "tool", "target": "mcp:agenlang_execute"}
+{"action": "subcontract", "target": "anp:https://peer.example.com/anp"}
+```
+
 **Documentation**
 
 - [AGENTS.md](AGENTS.md) — Project context, Do Not rules, checkpoint card
+- [threat_model.md](threat_model.md) — NIST SP 800-53 threat matrix

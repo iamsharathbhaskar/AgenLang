@@ -1,5 +1,6 @@
 """Pluggable SettlementBackend for JouleWork settlement."""
 
+import os
 from abc import ABC, abstractmethod
 from typing import Any, Dict
 
@@ -49,18 +50,26 @@ class StubSettlementBackend(SettlementBackend):
 
 
 class HeliumBackend(SettlementBackend):
-    """Helium network backend with HTTP API skeleton."""
+    """Helium network backend with authenticated API.
+
+    Requires HELIUM_API_KEY env var for real transactions.
+    Use api_url="stub:" for testing without network.
+    """
 
     def __init__(
         self,
         api_url: str = "https://api.helium.io/v1/pending_transactions",
     ) -> None:
-        """Initialize Helium backend.
-
-        Args:
-            api_url: Helium API endpoint. Use "stub:..." to return stub receipt.
-        """
         self.api_url = api_url
+        self._stub_mode = api_url.startswith("stub:")
+        if not self._stub_mode:
+            self.api_key = os.environ.get("HELIUM_API_KEY", "")
+            if not self.api_key:
+                raise ValueError(
+                    "HELIUM_API_KEY env var required for real Helium settlement"
+                )
+        else:
+            self.api_key = ""
 
     def settle(
         self,
@@ -71,7 +80,7 @@ class HeliumBackend(SettlementBackend):
     ) -> Dict[str, Any]:
         """Execute settlement via Helium API or return stub receipt."""
         amount = joules * rate
-        if self.api_url.startswith("stub:"):
+        if self._stub_mode:
             log.debug("helium_stub", recipient=joule_recipient, amount=amount)
             return {
                 "status": "helium_stub",
@@ -87,15 +96,28 @@ class HeliumBackend(SettlementBackend):
                 "amount": amount,
                 "address": micro_payment_address or "",
             }
-            resp = requests.post(self.api_url, json=payload, timeout=30)
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+            }
+            resp = requests.post(
+                self.api_url, json=payload, headers=headers, timeout=30
+            )
             resp.raise_for_status()
             data = resp.json()
-            log.info("helium_settlement_submitted", recipient=joule_recipient)
+            tx_id = data.get("hash", data.get("tx_id", ""))
+            log.info(
+                "helium_settlement_submitted",
+                recipient=joule_recipient,
+                tx_id=tx_id,
+            )
             return {
                 "status": "submitted",
                 "recipient": joule_recipient,
                 "amount": amount,
-                "tx_id": data.get("tx_id", ""),
+                "tx_id": tx_id,
+                "block_height": data.get("height", None),
+                "type": data.get("type", "payment_v2"),
             }
         except Exception as e:
             log.warning("helium_settlement_error", error=str(e))

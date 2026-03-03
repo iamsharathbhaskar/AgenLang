@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.3.2] — 2026-03-03
+
+### Added
+- Weighted probabilistic workflow: `weight` field on WorkflowStep, `random.choices` with weights
+- Multi-branch parallel execution with per-branch decision point tracking
+- Conditional step execution: `{{step_N_output}}` resolved from prior outcomes
+- Protocol auto-detect dispatch: `protocol:target` syntax routes through adapters
+- Protocol adapters: `acp.py` (REST), `mcp.py` (tool registration), `fipa.py` (ACL), `agui.py` (event streaming), `anp.py` (DID P2P), `w3c.py` (DID:web/key), `oasf.py` (manifest)
+- `HeliumBackend` with `HELIUM_API_KEY` authentication, proper headers, response parsing
+- `threat_model.md` with NIST SP 800-53 aligned risk matrix (10 threat categories)
+- Protocol compatibility table in README
+- Tests for all 7 adapters + updated runtime/settlement tests
+
+### Changed
+- `runtime.py` refactored: `_run_sequence`, `_run_parallel`, `_run_probabilistic` dispatch methods
+- `WorkflowStep` model now includes `weight: float = 1.0`
+- `HeliumBackend` requires `HELIUM_API_KEY` env var for real mode (raises `ValueError` if missing)
+- `schema/v1.0.json` updated with `weight` property on workflow steps
+
 ## [0.3.1] — 2026-03-03
 
 ### Added

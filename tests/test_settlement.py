@@ -2,6 +2,8 @@
 
 from unittest.mock import patch
 
+import pytest
+
 from agenlang.settlement import HeliumBackend, HeliumStubBackend, StubSettlementBackend
 
 
@@ -30,9 +32,17 @@ def test_helium_backend_stub_mode() -> None:
     assert receipt["address"] == "helium:addr"
 
 
-def test_helium_backend_error_path() -> None:
+def test_helium_backend_missing_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    """HeliumBackend raises ValueError without HELIUM_API_KEY."""
+    monkeypatch.delenv("HELIUM_API_KEY", raising=False)
+    with pytest.raises(ValueError, match="HELIUM_API_KEY"):
+        HeliumBackend()
+
+
+def test_helium_backend_error_path(monkeypatch: pytest.MonkeyPatch) -> None:
     """HeliumBackend returns error status when HTTP fails."""
-    backend = HeliumBackend(api_url="https://api.helium.io/v1/pending_transactions")
+    monkeypatch.setenv("HELIUM_API_KEY", "test-key")
+    backend = HeliumBackend()
 
     with patch("requests.post") as mock_post:
         mock_post.side_effect = Exception("Connection refused")
@@ -43,15 +53,24 @@ def test_helium_backend_error_path() -> None:
     assert "error" in receipt
 
 
-def test_helium_backend_success_path() -> None:
-    """HeliumBackend returns submitted status when HTTP succeeds."""
-    backend = HeliumBackend(api_url="https://api.helium.io/v1/pending_transactions")
+def test_helium_backend_success_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    """HeliumBackend returns submitted with auth header and parsed response."""
+    monkeypatch.setenv("HELIUM_API_KEY", "test-key-123")
+    backend = HeliumBackend()
 
     with patch("requests.post") as mock_post:
         mock_post.return_value.raise_for_status = lambda: None
-        mock_post.return_value.json.return_value = {"tx_id": "abc123"}
+        mock_post.return_value.json.return_value = {
+            "hash": "txn_abc123",
+            "type": "payment_v2",
+            "height": 42,
+        }
         receipt = backend.settle("recipient", 50.0, 10.0)
 
     assert receipt["status"] == "submitted"
     assert receipt["amount"] == 500.0
-    assert receipt["tx_id"] == "abc123"
+    assert receipt["tx_id"] == "txn_abc123"
+    assert receipt["block_height"] == 42
+    assert receipt["type"] == "payment_v2"
+    call_kwargs = mock_post.call_args
+    assert call_kwargs.kwargs["headers"]["Authorization"] == "Bearer test-key-123"

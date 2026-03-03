@@ -22,13 +22,22 @@ agenlang run examples/amazo-flight-booking.json
 ## Architecture
 - `src/agenlang/models.py` — Pydantic v2 models (full schema)
 - `src/agenlang/contract.py` — Contract loading, ECDSA signing/verification
-- `src/agenlang/runtime.py` — Workflow dispatcher, Joule metering, SER
+- `src/agenlang/runtime.py` — Workflow dispatcher, Joule metering, SER, protocol auto-detect
 - `src/agenlang/keys.py` — KeyManager (ECDSA + SER HMAC)
 - `src/agenlang/memory.py` — Encrypted (AES-GCM), SQLite, and plain backends
 - `src/agenlang/tools.py` — Tavily web_search + Grok summarize (env var gated)
-- `src/agenlang/a2a.py` — A2A JSON-RPC + SSE transport wrapper
-- `src/agenlang/settlement.py` — Pluggable settlement backends
+- `src/agenlang/settlement.py` — Pluggable settlement backends (Stub, Helium)
 - `src/agenlang/cli.py` — Click CLI entry point
+
+### Protocol Adapters
+- `src/agenlang/a2a.py` — A2A JSON-RPC + SSE transport wrapper
+- `src/agenlang/acp.py` — ACP REST message envelopes
+- `src/agenlang/mcp.py` — MCP tool registration (JSON-RPC 2.0)
+- `src/agenlang/fipa.py` — FIPA ACL performative mapping
+- `src/agenlang/agui.py` — AG-UI SER lifecycle event streaming
+- `src/agenlang/anp.py` — ANP P2P contract exchange with DID
+- `src/agenlang/w3c.py` — W3C DID:web + DID:key identity
+- `src/agenlang/oasf.py` — OASF manifest generation
 
 ## Do Not (non-negotiable)
 - Never use dummy tools, hardcoded joules=42, or fake settlement.

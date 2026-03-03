@@ -53,6 +53,7 @@
               "action": { "type": "string", "enum": ["tool", "skill", "subcontract", "embed"] },
               "target": { "type": "string" },
               "args": { "type": "object" },
+              "weight": { "type": "number", "minimum": 0, "default": 1.0 },
               "on_error": { "$ref": "#/definitions/error_handler" }
             },
             "required": ["action", "target"]

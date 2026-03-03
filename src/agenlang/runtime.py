@@ -18,6 +18,43 @@ from .tools import TOOLS
 
 log = structlog.get_logger()
 
+PROTOCOL_ADAPTERS: Dict[str, str] = {
+    "acp": "agenlang.acp",
+    "mcp": "agenlang.mcp",
+    "fipa": "agenlang.fipa",
+    "anp": "agenlang.anp",
+    "a2a": "agenlang.a2a",
+}
+
+
+def _parse_protocol_target(raw_target: str) -> Tuple[Optional[str], str]:
+    """Split 'protocol:target' into (protocol, target) or (None, target)."""
+    if ":" in raw_target:
+        proto, rest = raw_target.split(":", 1)
+        if proto in PROTOCOL_ADAPTERS:
+            return proto, rest
+    return None, raw_target
+
+
+def _dispatch_protocol(
+    protocol: str,
+    target: str,
+    action: str,
+    args: Dict[str, Any],
+    contract: "Contract",
+) -> str:
+    """Route step execution through a protocol adapter."""
+    import importlib
+
+    module_name = PROTOCOL_ADAPTERS.get(protocol)
+    if not module_name:
+        raise ValueError(f"Unknown protocol adapter: {protocol}")
+    mod = importlib.import_module(module_name)
+    dispatch_fn = getattr(mod, "dispatch", None)
+    if dispatch_fn is None:
+        raise ValueError(f"Adapter {module_name} has no dispatch() function")
+    return dispatch_fn(contract, action, target, args)
+
 
 class Runtime:
     """Executes an AgenLang contract safely and produces the SER.
@@ -45,8 +82,9 @@ class Runtime:
         self._joules_used = 0.0
         self._recursion_depth = 0
         self._max_recursion = 10
-        self.replay_data: list[dict[str, Any]] = []  # Raw data for replay file
-        self._decision_points: list[dict[str, Any]] = []  # For probabilistic workflows
+        self.replay_data: list[dict[str, Any]] = []
+        self._decision_points: list[dict[str, Any]] = []
+        self._step_outputs: dict[int, str] = {}  # idx -> output for conditional logic
         # Encrypted memory default (production)
         self.memory: Any = EncryptedMemoryBackend(
             self.execution_id,
@@ -73,34 +111,12 @@ class Runtime:
         workflow_type = self.contract.workflow.type
         steps = self.contract.workflow.steps
 
-        if workflow_type == "sequence" or workflow_type == "parallel":
-            if workflow_type == "parallel":
-                log.info(
-                    "workflow_parallel",
-                    note="parallel execution not yet implemented; running sequentially",
-                )
-            for step in steps:
-                if self._joules_used >= self.contract.constraints.joule_budget:
-                    raise ValueError("Joule budget exhausted")
-                self._execute_step_with_error_handler(step)
-                self.steps_executed += 1
+        if workflow_type == "sequence":
+            self._run_sequence(steps)
+        elif workflow_type == "parallel":
+            self._run_parallel(steps)
         elif workflow_type == "probabilistic":
-            if not steps:
-                raise ValueError("Probabilistic workflow requires at least one step")
-            step = random.choice(steps)
-            step_idx = steps.index(step)
-            self._decision_points.append(
-                {
-                    "type": "probabilistic_choice",
-                    "location": f"step_{step_idx}",
-                    "rationale": "random.choice",
-                    "chosen": True,
-                }
-            )
-            if self._joules_used >= self.contract.constraints.joule_budget:
-                raise ValueError("Joule budget exhausted")
-            self._execute_step_with_error_handler(step)
-            self.steps_executed += 1
+            self._run_probabilistic(steps)
         else:
             raise ValueError(f"Unknown workflow type: {workflow_type}")
 
@@ -155,6 +171,90 @@ class Runtime:
 
         return result, ser
 
+    def _resolve_step_args(self, step: Any, idx: int) -> Any:
+        """Resolve {{step_N_output}} placeholders in step args."""
+        args = step.args if hasattr(step, "args") else step.get("args", {})
+        resolved = {}
+        skip = False
+        for k, v in args.items():
+            if isinstance(v, str) and "{{step_" in v and "_output}}" in v:
+                import re
+
+                match = re.search(r"\{\{step_(\d+)_output\}\}", v)
+                if match:
+                    ref_idx = int(match.group(1))
+                    if ref_idx not in self._step_outputs:
+                        skip = True
+                        break
+                    resolved[k] = v.replace(match.group(0), self._step_outputs[ref_idx])
+                else:
+                    resolved[k] = v
+            else:
+                resolved[k] = v
+        return resolved, skip
+
+    def _run_sequence(self, steps: list) -> None:
+        """Execute steps in order with conditional skipping."""
+        for idx, step in enumerate(steps):
+            if self._joules_used >= self.contract.constraints.joule_budget:
+                raise ValueError("Joule budget exhausted")
+            resolved_args, skip = self._resolve_step_args(step, idx)
+            if skip:
+                log.info("step_skipped", idx=idx, reason="precondition_unmet")
+                self._decision_points.append(
+                    {
+                        "type": "conditional_skip",
+                        "location": f"step_{idx}",
+                        "rationale": "prior outcome unavailable",
+                        "chosen": False,
+                    }
+                )
+                continue
+            self._execute_step_with_error_handler(step, resolved_args)
+            self.steps_executed += 1
+
+    def _run_parallel(self, steps: list) -> None:
+        """Execute all steps as independent branches with decision tracking."""
+        log.info("workflow_parallel", branches=len(steps))
+        for idx, step in enumerate(steps):
+            if self._joules_used >= self.contract.constraints.joule_budget:
+                raise ValueError("Joule budget exhausted")
+            self._decision_points.append(
+                {
+                    "type": "parallel_branch",
+                    "location": f"branch_{idx}",
+                    "rationale": f"independent branch {idx}/{len(steps)}",
+                    "chosen": True,
+                }
+            )
+            resolved_args, _skip = self._resolve_step_args(step, idx)
+            self._execute_step_with_error_handler(step, resolved_args)
+            self.steps_executed += 1
+
+    def _run_probabilistic(self, steps: list) -> None:
+        """Weighted random selection from steps."""
+        if not steps:
+            raise ValueError("Probabilistic workflow requires at least one step")
+        weights = [
+            (s.weight if hasattr(s, "weight") else s.get("weight", 1.0)) for s in steps
+        ]
+        chosen = random.choices(steps, weights=weights, k=1)[0]
+        chosen_idx = steps.index(chosen)
+        for idx, step in enumerate(steps):
+            w = weights[idx]
+            self._decision_points.append(
+                {
+                    "type": "probabilistic_choice",
+                    "location": f"step_{idx}",
+                    "rationale": f"weight={w}, selected={'yes' if idx == chosen_idx else 'no'}",
+                    "chosen": idx == chosen_idx,
+                }
+            )
+        if self._joules_used >= self.contract.constraints.joule_budget:
+            raise ValueError("Joule budget exhausted")
+        self._execute_step_with_error_handler(chosen)
+        self.steps_executed += 1
+
     def _compute_reputation_score(self, joules_used: float) -> float:
         """Compute reputation score from SER (JouleWork futures)."""
         budget = self.contract.constraints.joule_budget
@@ -170,7 +270,9 @@ class Runtime:
             return 0.0
         return max(0.0, min(1.0, 1.0 - (joules_used / budget)))
 
-    def _execute_step_with_error_handler(self, step: Any) -> None:
+    def _execute_step_with_error_handler(
+        self, step: Any, resolved_args: Optional[dict] = None
+    ) -> None:
         """Execute step with on_error retry/fallback."""
         on_error = step.on_error if hasattr(step, "on_error") else step.get("on_error")
         retries = (
@@ -181,7 +283,7 @@ class Runtime:
         last_error: Optional[Exception] = None
         for attempt in range(retries + 1):
             try:
-                self._execute_step(step)
+                self._execute_step(step, resolved_args)
                 return
             except Exception as e:
                 last_error = e
@@ -190,11 +292,15 @@ class Runtime:
         if last_error:
             raise last_error
 
-    def _execute_step(self, step: Any) -> None:
+    def _execute_step(self, step: Any, resolved_args: Optional[dict] = None) -> None:
         """Execute a single step (tool, skill, subcontract, embed).
+
+        Supports protocol auto-detect via 'protocol:target' syntax
+        (e.g., 'acp:agent-id', 'mcp:tool-name').
 
         Args:
             step: Workflow step (WorkflowStep model or dict).
+            resolved_args: Pre-resolved args (with {{step_N_output}} filled).
 
         Raises:
             ValueError: If tool unknown or capability violated.
@@ -204,8 +310,30 @@ class Runtime:
         self._recursion_depth += 1
         try:
             action = step.action if hasattr(step, "action") else step.get("action")
-            target = step.target if hasattr(step, "target") else step.get("target")
-            args = step.args if hasattr(step, "args") else step.get("args", {})
+            raw_target = step.target if hasattr(step, "target") else step.get("target")
+            args = (
+                resolved_args
+                if resolved_args is not None
+                else (step.args if hasattr(step, "args") else step.get("args", {}))
+            )
+
+            protocol, target = _parse_protocol_target(raw_target)
+
+            if protocol:
+                output = _dispatch_protocol(
+                    protocol, target, action, args, self.contract
+                )
+                self._joules_used += 100.0
+                step_idx = len(self.replay_data)
+                self.replay_data.append({"step": raw_target, "output": output})
+                self._step_outputs[step_idx] = output
+                log.info(
+                    "protocol_dispatched",
+                    protocol=protocol,
+                    target=target,
+                    output=output,
+                )
+                return
 
             if action == "tool":
                 tool = TOOLS.get(target)
@@ -218,7 +346,9 @@ class Runtime:
                         output = tool["function"](args)
                         joule_cost = tool.get("joule_cost", 100.0)
                         self._joules_used += joule_cost
+                        step_idx = len(self.replay_data)
                         self.replay_data.append({"step": target, "output": output})
+                        self._step_outputs[step_idx] = output
                         log.info("tool_executed", tool=target, output=output)
                     else:
                         raise ValueError(f"Capability violation for tool {target}")
@@ -226,15 +356,17 @@ class Runtime:
                     raise ValueError(f"Unknown tool {target}")
             elif action == "skill":
                 raise NotImplementedError(
-                    f"skill:{target} requires A2A adapter (Phase 6)"
+                    f"skill:{target} — use protocol prefix "
+                    "(e.g. acp:{target}, mcp:{target})"
                 )
             elif action == "subcontract":
                 raise NotImplementedError(
-                    f"subcontract:{target} requires A2A adapter (Phase 6)"
+                    f"subcontract:{target} — use protocol prefix "
+                    "(e.g. acp:{target}, anp:{target})"
                 )
             elif action == "embed":
                 raise NotImplementedError(
-                    f"embed:{target} requires A2A adapter (Phase 6)"
+                    f"embed:{target} — use protocol prefix " "(e.g. mcp:{target})"
                 )
             else:
                 log.info("step_executing", action=action, target=target)

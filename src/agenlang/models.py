@@ -39,6 +39,7 @@ class WorkflowStep(BaseModel):
     action: Literal["tool", "skill", "subcontract", "embed"]
     target: str
     args: dict[str, Any] = Field(default_factory=dict)
+    weight: float = Field(default=1.0, ge=0)
     on_error: Optional[ErrorHandler] = None
 
 
