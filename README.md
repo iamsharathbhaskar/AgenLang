@@ -86,6 +86,7 @@ Token overhead: <80 tokens when compressed.
 
 ## Documentation
 
+- [SPEC.md](SPEC.md) — **Single source of truth**: official AgenLang specification (contract format, signing, SER, ledger, A2A, security)
 - [AGENTS.md](AGENTS.md) — Project context, Do Not rules
 - [skills.md](skills.md) — Register AgenLang as a tool in LangChain/CrewAI/OpenClaw
 - [threat_model.md](threat_model.md) — NIST SP 800-53 threat matrix
