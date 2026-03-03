@@ -185,131 +185,6 @@ def test_runtime_no_key_manager(tmp_path: Path) -> None:
     assert result["status"] == "success"
 
 
-def test_runtime_probabilistic_workflow(tmp_path: Path) -> None:
-    """Probabilistic workflow: weighted selection, per-step decision points."""
-    from unittest.mock import patch
-
-    km = KeyManager(key_path=tmp_path / "keys.pem")
-    km.generate()
-    contract = Contract.from_file(str(EXAMPLES_DIR / "probabilistic.json"))
-    assert contract.workflow.type == "probabilistic"
-    assert len(contract.workflow.steps) == 2
-
-    with patch(
-        "agenlang.runtime.random.choices", return_value=[contract.workflow.steps[0]]
-    ):
-        runtime = Runtime(contract, key_manager=km)
-        result, ser = runtime.execute()
-
-    assert result["status"] == "success"
-    assert result["steps_completed"] == 1
-    assert ser["resource_usage"]["joules_used"] == 150.0
-    assert len(ser["decision_points"]) == 2
-    chosen = [dp for dp in ser["decision_points"] if dp["chosen"]]
-    assert len(chosen) == 1
-    assert chosen[0]["location"] == "step_0"
-
-
-def test_runtime_probabilistic_empty_steps(tmp_path: Path) -> None:
-    """Probabilistic workflow with no steps raises."""
-    km = KeyManager(key_path=tmp_path / "keys.pem")
-    km.generate()
-    contract = Contract.from_file(str(EXAMPLES_DIR / "probabilistic.json"))
-    contract.workflow.steps = []
-    runtime = Runtime(contract, key_manager=km)
-    with pytest.raises(
-        ValueError, match="Probabilistic workflow requires at least one step"
-    ):
-        runtime.execute()
-
-
-def test_runtime_unknown_workflow_type(tmp_path: Path) -> None:
-    """Unknown workflow type raises."""
-    km = KeyManager(key_path=tmp_path / "keys.pem")
-    km.generate()
-    contract = Contract.from_file(str(EXAMPLES_DIR / "amazo-flight-booking.json"))
-    object.__setattr__(
-        contract.workflow, "type", "unknown"
-    )  # bypass Pydantic validation
-    runtime = Runtime(contract, key_manager=km)
-    with pytest.raises(ValueError, match="Unknown workflow type"):
-        runtime.execute()
-
-
-def test_runtime_parallel_workflow(tmp_path: Path) -> None:
-    """Parallel workflow runs all steps with branch decision points."""
-    km = KeyManager(key_path=tmp_path / "keys.pem")
-    km.generate()
-    contract = Contract.from_file(str(EXAMPLES_DIR / "amazo-flight-booking.json"))
-    object.__setattr__(contract.workflow, "type", "parallel")
-    runtime = Runtime(contract, key_manager=km)
-    result, ser = runtime.execute()
-    assert result["status"] == "success"
-    assert result["steps_completed"] == 2
-    branches = [dp for dp in ser["decision_points"] if dp["type"] == "parallel_branch"]
-    assert len(branches) == 2
-
-
-def test_runtime_parallel_concurrent(tmp_path: Path) -> None:
-    """Parallel workflow executes steps via ThreadPoolExecutor."""
-    import time
-    from unittest.mock import patch
-
-    km = KeyManager(key_path=tmp_path / "keys.pem")
-    km.generate()
-    contract = Contract.from_file(str(EXAMPLES_DIR / "amazo-flight-booking.json"))
-    object.__setattr__(contract.workflow, "type", "parallel")
-
-    call_times: list[float] = []
-    original_execute_step = Runtime._execute_step_with_error_handler
-
-    def recording_execute(self, step, resolved_args=None):
-        call_times.append(time.monotonic())
-        return original_execute_step(self, step, resolved_args)
-
-    with patch.object(Runtime, "_execute_step_with_error_handler", recording_execute):
-        runtime = Runtime(contract, key_manager=km)
-        result, ser = runtime.execute()
-
-    assert result["status"] == "success"
-    assert result["steps_completed"] == 2
-    assert len(call_times) == 2
-
-
-def test_runtime_max_concurrency(tmp_path: Path) -> None:
-    """max_concurrency field is respected by parallel workflow."""
-    km = KeyManager(key_path=tmp_path / "keys.pem")
-    km.generate()
-    contract = Contract.from_file(str(EXAMPLES_DIR / "amazo-flight-booking.json"))
-    object.__setattr__(contract.workflow, "type", "parallel")
-    contract.workflow.max_concurrency = 1
-    runtime = Runtime(contract, key_manager=km)
-    result, ser = runtime.execute()
-    assert result["status"] == "success"
-    assert result["steps_completed"] == 2
-
-
-def test_runtime_weighted_probabilistic(tmp_path: Path) -> None:
-    """Weighted probabilistic uses step weights."""
-    from unittest.mock import patch
-
-    km = KeyManager(key_path=tmp_path / "keys.pem")
-    km.generate()
-    contract = Contract.from_file(str(EXAMPLES_DIR / "probabilistic.json"))
-    assert contract.workflow.steps[0].weight == 0.7
-    assert contract.workflow.steps[1].weight == 0.3
-
-    with patch("agenlang.runtime.random.choices") as mock_choices:
-        mock_choices.return_value = [contract.workflow.steps[1]]
-        runtime = Runtime(contract, key_manager=km)
-        result, ser = runtime.execute()
-
-    mock_choices.assert_called_once()
-    call_kwargs = mock_choices.call_args
-    assert call_kwargs.kwargs["weights"] == [0.7, 0.3]
-    assert result["steps_completed"] == 1
-
-
 def test_runtime_conditional_skip(tmp_path: Path) -> None:
     """Sequence step with unresolved {{step_N_output}} is skipped."""
     km = KeyManager(key_path=tmp_path / "keys.pem")
@@ -324,14 +199,14 @@ def test_runtime_conditional_skip(tmp_path: Path) -> None:
 
 
 def test_runtime_protocol_dispatch(tmp_path: Path) -> None:
-    """Protocol auto-detect routes to adapter dispatch."""
+    """Protocol auto-detect routes to A2A adapter dispatch."""
     from unittest.mock import MagicMock, patch
 
     km = KeyManager(key_path=tmp_path / "keys.pem")
     km.generate()
     contract = Contract.from_file(str(EXAMPLES_DIR / "amazo-flight-booking.json"))
     contract.workflow.steps = [contract.workflow.steps[0]]
-    contract.workflow.steps[0].target = "fipa:test-agent"
+    contract.workflow.steps[0].target = "a2a:test-agent"
 
     mock_mod = MagicMock()
     mock_mod.dispatch.return_value = '{"status": "ok"}'

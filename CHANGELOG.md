@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.4.0] — 2026-03-03
+
+### Removed
+- All protocol adapters except A2A: `acp.py`, `mcp.py`, `fipa.py`, `agui.py`, `anp.py`, `w3c.py`, `oasf.py`
+- Solana/Helium settlement backends (`solana.py`, `HeliumBackend`)
+- Probabilistic and parallel workflow types (sequence-only)
+- `weight` field from WorkflowStep, `max_concurrency` from Workflow
+- `__main__.py` (MCP server entry point)
+- Dev dependencies: `fastapi`, `uvicorn`, `httpx`, `websockets`, `websocket-client`
+- `agenlang_skills.md` (replaced by `skills.md`)
+
+### Added
+- `SignedLedger` and `LedgerEntry` in `settlement.py` — signed double-entry ledger with per-step ECDSA signatures
+- Ledger entries embedded in SER under `"ledger_entries"` key
+- `skills.md` — clean guide for registering AgenLang in LangChain/CrewAI/OpenClaw
+
+### Changed
+- Kernel consolidation: stripped to contract + signing + SER + A2A + simple signed ledger
+- `runtime.py`: sequential-only execution, A2A-only protocol dispatch, signed ledger per step
+- `settlement.py`: complete rewrite to signed double-entry ledger
+- `models.py` and `schema/v1.0.json`: sequence-only workflow, no weight/max_concurrency
+- README, AGENTS.md, threat_model.md updated for kernel-only architecture
+
 ## [0.3.4] — 2026-03-03
 
 ### Added

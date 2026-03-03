@@ -14,16 +14,16 @@ Mapped to NIST SP 800-53 Rev. 5 control families.
 | T5 | **Key Compromise** — Private key stolen from `~/.agenlang/keys.pem` | SC-12 (Cryptographic Key Management), IA-5 (Authenticator Management) | Critical | Low | File permissions `0o600`; configurable `AGENLANG_KEY_DIR`; key rotation support via `KeyManager.generate()` | Medium — no HSM/Vault integration; plaintext PEM on disk |
 | T6 | **Memory Exfiltration** — Unauthorized access to handoff data or SER memory | SC-28 (Protection of Information at Rest), MP-5 (Media Transport) | High | Medium | AES-256-GCM encrypted memory backend (default); GDPR `purge_on_complete`; `pii_level` constraints; `data_subject` tracking | Low — encryption key derived from SER key; memory purged after execution |
 | T7 | **Supply-Chain Attack (Tool Poisoning)** — Malicious tool registered in `TOOLS` registry executes arbitrary code | SA-12 (Supply Chain Protection), CM-7 (Least Functionality) | Critical | Low | Capability attestation proofs required per tool; tool registry is explicit (not auto-discovery); `capabilities` whitelist check before execution | Medium — attestation proofs are not yet verified against a CA |
-| T8 | **Man-in-the-Middle** — Interception of A2A/ACP/ANP messages during transit | SC-8 (Transmission Confidentiality), SC-23 (Session Authenticity) | High | Medium | HTTPS transport for all protocol adapters; ANP envelopes include DID-based signatures; A2A JSON-RPC has contract signature | Low — transport encryption + payload signing provides defense-in-depth |
-| T9 | **Unauthorized Settlement** — Triggering settlement without valid execution | AU-12 (Audit Record Generation), AC-3 (Access Enforcement) | High | Low | Settlement receipt tied to SER execution_id; `HeliumBackend` requires `HELIUM_API_KEY`; SER records full audit trail | Low — requires both API key and valid execution context |
-| T10 | **DID Spoofing** — Forging a DID to impersonate another agent in ANP/W3C exchanges | IA-8 (Identification and Authentication), IA-12 (Identity Proofing) | High | Low | DID:key derived from ECDSA public key (cryptographically bound); ANP envelope signatures verified against sender DID | Low — DID is mathematically tied to key pair |
+| T8 | **Man-in-the-Middle** — Interception of A2A messages during transit | SC-8 (Transmission Confidentiality), SC-23 (Session Authenticity) | High | Medium | HTTPS transport for A2A adapter; A2A JSON-RPC has contract signature | Low — transport encryption + payload signing provides defense-in-depth |
+| T9 | **Unauthorized Settlement** — Triggering settlement without valid execution | AU-12 (Audit Record Generation), AC-3 (Access Enforcement) | High | Low | Signed ledger entries tied to SER execution_id; per-step ECDSA signatures; SER records full audit trail | Low — requires valid KeyManager and execution context |
+| T10 | **API Key Leakage** — Embedded API keys in contract JSON exposing secrets | SC-28 (Protection of Information at Rest), IA-5 (Authenticator Management) | High | Medium | Regex-based leak prevention in `Contract.from_dict()` and `Contract.model_validate()`; rejects contracts with key-like patterns | Low — validation runs before any execution |
 
 ## Trust Boundaries
 
 ```
 +------------------+     HTTPS/TLS      +------------------+
 |  Local Agent     | <================> |  Remote Agent    |
-|  (AgenLang RT)   |                    |  (ACP/ANP/A2A)   |
+|  (AgenLang RT)   |                    |  (A2A)           |
 +--------+---------+                    +------------------+
          |
    +-----v------+
@@ -41,20 +41,20 @@ Mapped to NIST SP 800-53 Rev. 5 control families.
 
 ## Mitigation Code References
 
-| Threat | Mitigation | File:Line |
-|--------|-----------|-----------|
-| T1 Replay Attack | HMAC-SHA256 on SER replay data | `runtime.py:402` `_save_replay()` |
-| T1 Replay Attack | SER key derivation | `keys.py:138` `get_ser_key()` |
-| T2 Goal Hijacking | Intent anchor hash binding | `contract.py:124` `sign()` canonical payload |
-| T3 Contract Tampering | ECDSA signature verification | `contract.py:145` `verify_signature()` |
-| T4 DoS / Joule Exhaustion | Budget check per step | `runtime.py:213` `_run_sequence()` budget check |
-| T5 Key Compromise | File permission 0o600 | `keys.py:60` key file creation |
-| T6 Memory Exfiltration | AES-256-GCM encryption | `memory.py:83` `EncryptedMemoryBackend` |
-| T7 Tool Poisoning | Capability attestation check | `runtime.py:354` `_execute_step()` capability whitelist |
-| T8 Man-in-the-Middle | ANP envelope DID signatures | `anp.py:73` `create_anp_envelope()` |
-| T9 Unauthorized Settlement | API key requirement | `settlement.py:65` `HeliumBackend.__init__()` |
-| T10 DID Spoofing | DID:key crypto binding | `anp.py:24` `derive_did_from_key_manager()` |
-| All | Retry with backoff (network resilience) | `utils.py:13` `retry_with_backoff()` |
+| Threat | Mitigation | File |
+|--------|-----------|------|
+| T1 Replay Attack | HMAC-SHA256 on SER replay data | `runtime.py` `_save_replay()` |
+| T1 Replay Attack | SER key derivation | `keys.py` `get_ser_key()` |
+| T2 Goal Hijacking | Intent anchor hash binding | `contract.py` `sign()` canonical payload |
+| T3 Contract Tampering | ECDSA signature verification | `contract.py` `verify_signature()` |
+| T4 DoS / Joule Exhaustion | Budget check per step | `runtime.py` `_run_sequence()` budget check |
+| T5 Key Compromise | File permission 0o600 | `keys.py` key file creation |
+| T6 Memory Exfiltration | AES-256-GCM encryption | `memory.py` `EncryptedMemoryBackend` |
+| T7 Tool Poisoning | Capability attestation check | `runtime.py` `_execute_step()` capability whitelist |
+| T8 Man-in-the-Middle | A2A contract signature | `a2a.py` `contract_to_a2a_payload()` |
+| T9 Unauthorized Settlement | Signed ledger entries | `settlement.py` `SignedLedger.append_entry()` |
+| T10 API Key Leakage | Regex leak prevention | `contract.py` `_check_for_leaked_keys()` |
+| All | Retry with backoff (network resilience) | `utils.py` `retry_with_backoff()` |
 
 ## Recommendations for Future Hardening
 

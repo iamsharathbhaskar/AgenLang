@@ -1,76 +1,71 @@
-"""Tests for settlement backends."""
+# Copyright 2024 AgenLang Contributors
+# SPDX-License-Identifier: Apache-2.0
 
-from unittest.mock import patch
+"""Tests for signed ledger settlement."""
 
-import pytest
+from pathlib import Path
 
-from agenlang.settlement import HeliumBackend, HeliumStubBackend, StubSettlementBackend
-
-
-def test_stub_settlement() -> None:
-    """Stub settlement returns receipt."""
-    backend = StubSettlementBackend()
-    receipt = backend.settle("recipient", 100.0, 2.0)
-    assert receipt["status"] == "stub"
-    assert receipt["amount_owed"] == 200.0
+from agenlang.keys import KeyManager
+from agenlang.settlement import LedgerEntry, SignedLedger
 
 
-def test_helium_stub() -> None:
-    """Helium stub returns receipt."""
-    backend = HeliumStubBackend()
-    receipt = backend.settle("recipient", 50.0, 10.0, "helium:addr")
-    assert receipt["status"] == "helium_stub"
-    assert receipt["amount"] == 500.0
+def test_ledger_entry_model() -> None:
+    """LedgerEntry stores all required fields."""
+    entry = LedgerEntry(
+        entry_type="debit",
+        amount_joules=150.0,
+        recipient="agent-001",
+        timestamp="2026-01-01T00:00:00Z",
+        signature="abcd",
+    )
+    assert entry.entry_type == "debit"
+    assert entry.amount_joules == 150.0
+    assert entry.recipient == "agent-001"
 
 
-def test_helium_backend_stub_mode() -> None:
-    """HeliumBackend with stub api_url returns stub receipt."""
-    backend = HeliumBackend(api_url="stub:")
-    receipt = backend.settle("recipient", 50.0, 10.0, "helium:addr")
-    assert receipt["status"] == "helium_stub"
-    assert receipt["amount"] == 500.0
-    assert receipt["address"] == "helium:addr"
+def test_signed_ledger_append_and_verify(tmp_path: Path) -> None:
+    """Appending entries signs them and verify_all succeeds."""
+    km = KeyManager(key_path=tmp_path / "keys.pem")
+    km.generate()
+    ledger = SignedLedger()
+    ledger.append_entry("debit", 100.0, "recipient-a", km)
+    ledger.append_entry("credit", 50.0, "recipient-b", km)
+
+    assert len(ledger.entries) == 2
+    assert ledger.entries[0].entry_type == "debit"
+    assert ledger.entries[1].entry_type == "credit"
+    assert ledger.entries[0].signature != ""
+    assert ledger.verify_all(km)
 
 
-def test_helium_backend_missing_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
-    """HeliumBackend raises ValueError without HELIUM_API_KEY."""
-    monkeypatch.delenv("HELIUM_API_KEY", raising=False)
-    with pytest.raises(ValueError, match="HELIUM_API_KEY"):
-        HeliumBackend()
+def test_signed_ledger_tamper_detection(tmp_path: Path) -> None:
+    """Tampered entry fails verification."""
+    km = KeyManager(key_path=tmp_path / "keys.pem")
+    km.generate()
+    ledger = SignedLedger()
+    ledger.append_entry("debit", 100.0, "recipient-a", km)
+    ledger._entries[0].amount_joules = 9999.0
+    assert not ledger.verify_all(km)
 
 
-def test_helium_backend_error_path(monkeypatch: pytest.MonkeyPatch) -> None:
-    """HeliumBackend returns error status when HTTP fails."""
-    monkeypatch.setenv("HELIUM_API_KEY", "test-key")
-    backend = HeliumBackend()
+def test_signed_ledger_to_dict(tmp_path: Path) -> None:
+    """to_dict returns serializable list."""
+    km = KeyManager(key_path=tmp_path / "keys.pem")
+    km.generate()
+    ledger = SignedLedger()
+    ledger.append_entry("debit", 200.0, "recipient-x", km)
+    data = ledger.to_dict()
+    assert isinstance(data, list)
+    assert len(data) == 1
+    assert data[0]["entry_type"] == "debit"
+    assert data[0]["amount_joules"] == 200.0
+    assert data[0]["signature"] != ""
 
-    with patch("requests.post") as mock_post:
-        mock_post.side_effect = Exception("Connection refused")
-        receipt = backend.settle("recipient", 50.0, 10.0)
 
-    assert receipt["status"] == "error"
-    assert receipt["amount"] == 500.0
-    assert "error" in receipt
-
-
-def test_helium_backend_success_path(monkeypatch: pytest.MonkeyPatch) -> None:
-    """HeliumBackend returns submitted with auth header and parsed response."""
-    monkeypatch.setenv("HELIUM_API_KEY", "test-key-123")
-    backend = HeliumBackend()
-
-    with patch("requests.post") as mock_post:
-        mock_post.return_value.raise_for_status = lambda: None
-        mock_post.return_value.json.return_value = {
-            "hash": "txn_abc123",
-            "type": "payment_v2",
-            "height": 42,
-        }
-        receipt = backend.settle("recipient", 50.0, 10.0)
-
-    assert receipt["status"] == "submitted"
-    assert receipt["amount"] == 500.0
-    assert receipt["tx_id"] == "txn_abc123"
-    assert receipt["block_height"] == 42
-    assert receipt["type"] == "payment_v2"
-    call_kwargs = mock_post.call_args
-    assert call_kwargs.kwargs["headers"]["Authorization"] == "Bearer test-key-123"
+def test_signed_ledger_empty_verify(tmp_path: Path) -> None:
+    """Empty ledger verifies successfully."""
+    km = KeyManager(key_path=tmp_path / "keys.pem")
+    km.generate()
+    ledger = SignedLedger()
+    assert ledger.verify_all(km)
+    assert ledger.to_dict() == []

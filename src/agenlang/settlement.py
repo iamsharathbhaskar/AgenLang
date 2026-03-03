@@ -1,136 +1,98 @@
-"""Pluggable SettlementBackend for JouleWork settlement."""
+# Copyright 2024 AgenLang Contributors
+# SPDX-License-Identifier: Apache-2.0
 
-import os
-from abc import ABC, abstractmethod
-from typing import Any, Dict
+"""Signed double-entry ledger for JouleWork settlement."""
+
+from datetime import datetime, timezone
+from typing import Any, Dict, List
 
 import structlog
+from pydantic import BaseModel
+
+from .keys import KeyManager
 
 log = structlog.get_logger()
 
 
-class SettlementBackend(ABC):
-    """Abstract settlement backend."""
+class LedgerEntry(BaseModel):
+    """A single debit or credit in the settlement ledger."""
 
-    @abstractmethod
-    def settle(
-        self,
-        joule_recipient: str,
-        joules: float,
-        rate: float,
-        micro_payment_address: str | None = None,
-    ) -> Dict[str, Any]:
-        """Execute settlement.
-
-        Returns:
-            Receipt dict with status, tx_id, etc.
-        """
-        ...
+    entry_type: str  # "debit" or "credit"
+    amount_joules: float
+    recipient: str
+    timestamp: str
+    signature: str = ""
 
 
-class StubSettlementBackend(SettlementBackend):
-    """Stub for testing; no real settlement."""
-
-    def settle(
-        self,
-        joule_recipient: str,
-        joules: float,
-        rate: float,
-        micro_payment_address: str | None = None,
-    ) -> Dict[str, Any]:
-        """Return stub receipt."""
-        log.debug("stub_settlement", joule_recipient=joule_recipient, joules=joules)
-        return {
-            "status": "stub",
-            "joule_recipient": joule_recipient,
-            "total_joules": joules,
-            "rate": rate,
-            "amount_owed": joules * rate,
-        }
-
-
-class HeliumBackend(SettlementBackend):
-    """Helium network backend with authenticated API.
-
-    Requires HELIUM_API_KEY env var for real transactions.
-    Use api_url="stub:" for testing without network.
-    """
-
-    def __init__(
-        self,
-        api_url: str = "https://api.helium.io/v1/pending_transactions",
-    ) -> None:
-        self.api_url = api_url
-        self._stub_mode = api_url.startswith("stub:")
-        if not self._stub_mode:
-            self.api_key = os.environ.get("HELIUM_API_KEY", "")
-            if not self.api_key:
-                raise ValueError(
-                    "HELIUM_API_KEY env var required for real Helium settlement"
-                )
-        else:
-            self.api_key = ""
-
-    def settle(
-        self,
-        joule_recipient: str,
-        joules: float,
-        rate: float,
-        micro_payment_address: str | None = None,
-    ) -> Dict[str, Any]:
-        """Execute settlement via Helium API or return stub receipt."""
-        amount = joules * rate
-        if self._stub_mode:
-            log.debug("helium_stub", recipient=joule_recipient, amount=amount)
-            return {
-                "status": "helium_stub",
-                "recipient": joule_recipient,
-                "amount": amount,
-                "address": micro_payment_address or "helium:stub",
-            }
-        try:
-            import requests  # type: ignore[import-untyped]
-
-            payload = {
-                "recipient": joule_recipient,
-                "amount": amount,
-                "address": micro_payment_address or "",
-            }
-            headers = {
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json",
-            }
-            resp = requests.post(
-                self.api_url, json=payload, headers=headers, timeout=30
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            tx_id = data.get("hash", data.get("tx_id", ""))
-            log.info(
-                "helium_settlement_submitted",
-                recipient=joule_recipient,
-                tx_id=tx_id,
-            )
-            return {
-                "status": "submitted",
-                "recipient": joule_recipient,
-                "amount": amount,
-                "tx_id": tx_id,
-                "block_height": data.get("height", None),
-                "type": data.get("type", "payment_v2"),
-            }
-        except Exception as e:
-            log.warning("helium_settlement_error", error=str(e))
-            return {
-                "status": "error",
-                "recipient": joule_recipient,
-                "amount": amount,
-                "error": str(e),
-            }
-
-
-class HeliumStubBackend(HeliumBackend):
-    """Backward compatibility: HeliumBackend that always returns stub receipt."""
+class SignedLedger:
+    """Append-only ledger of signed settlement entries."""
 
     def __init__(self) -> None:
-        super().__init__(api_url="stub:")
+        self._entries: List[LedgerEntry] = []
+
+    def append_entry(
+        self,
+        entry_type: str,
+        amount_joules: float,
+        recipient: str,
+        km: KeyManager,
+    ) -> LedgerEntry:
+        """Create a signed ledger entry and append it.
+
+        Args:
+            entry_type: "debit" or "credit".
+            amount_joules: Joule cost of the step.
+            recipient: Who receives the joules.
+            km: KeyManager used to sign the entry.
+
+        Returns:
+            The signed LedgerEntry.
+        """
+        ts = datetime.now(timezone.utc).isoformat() + "Z"
+        payload = f"{entry_type}|{amount_joules}|{recipient}|{ts}"
+        signature = km.sign(payload.encode("utf-8")).hex()
+        entry = LedgerEntry(
+            entry_type=entry_type,
+            amount_joules=amount_joules,
+            recipient=recipient,
+            timestamp=ts,
+            signature=signature,
+        )
+        self._entries.append(entry)
+        log.debug(
+            "ledger_entry_appended",
+            entry_type=entry_type,
+            amount=amount_joules,
+            recipient=recipient,
+        )
+        return entry
+
+    def verify_all(self, km: KeyManager) -> bool:
+        """Verify every entry signature.
+
+        Returns:
+            True if all signatures are valid.
+        """
+        pub_pem = km.get_public_key_pem()
+        for entry in self._entries:
+            payload = (
+                f"{entry.entry_type}|{entry.amount_joules}"
+                f"|{entry.recipient}|{entry.timestamp}"
+            )
+            if not km.verify(
+                payload.encode("utf-8"),
+                bytes.fromhex(entry.signature),
+                pub_pem,
+            ):
+                log.warning("ledger_verify_failed", entry=entry.model_dump())
+                return False
+        return True
+
+    def to_dict(self) -> List[Dict[str, Any]]:
+        """Serialize ledger for SER embedding."""
+        return [e.model_dump() for e in self._entries]
+
+    @property
+    def entries(self) -> List[LedgerEntry]:
+        """Read-only access to entries."""
+        return list(self._entries)

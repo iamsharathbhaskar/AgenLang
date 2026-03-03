@@ -1,6 +1,6 @@
 [project]
 name = "agenlang"
-version = "0.3.4"
+version = "0.4.0"
 description = "AgenLang — standardized contract substrate for secure inter-agent communication"
 readme = "README.md"
 license = {text = "Apache-2.0"}
@@ -24,12 +24,7 @@ dev = [
   "ruff>=0.5",
   "black>=24.0",
   "tiktoken>=0.7",
-  "redis>=5.0",
-  "fastapi>=0.110",
-  "uvicorn>=0.30",
-  "httpx>=0.27",
-  "websockets>=12.0",
-  "websocket-client>=1.7"
+  "redis>=5.0"
 ]
 
 [tool.pytest.ini_options]
@@ -39,14 +34,14 @@ filterwarnings = ["ignore:datetime.utcnow"]
 
 [tool.coverage.run]
 source = ["src/agenlang"]
-omit = ["*/tests/*", "*/__main__.py"]
+omit = ["*/tests/*"]
 
 [tool.coverage.report]
 fail_under = 95
 
 [tool.bandit]
 exclude_dirs = ["tests"]
-skips = ["B101", "B104", "B311"]  # B101: assert; B104: configurable bind addr; B311: workflow random
+skips = ["B101"]  # B101: assert used for type narrowing
 
 [tool.ruff]
 target-version = "py312"

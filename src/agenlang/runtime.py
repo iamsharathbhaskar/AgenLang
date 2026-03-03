@@ -1,9 +1,6 @@
 """AgenLang Runtime - executes contracts with safety, audit, and settlement."""
 
 import json
-import random
-import threading
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
@@ -16,16 +13,13 @@ from cryptography.hazmat.primitives.hashes import SHA256
 from .contract import Contract
 from .keys import KeyManager
 from .memory import EncryptedMemoryBackend
+from .settlement import SignedLedger
 from .tools import TOOLS
 from .utils import retry_with_backoff
 
 log = structlog.get_logger()
 
 PROTOCOL_ADAPTERS: Dict[str, str] = {
-    "acp": "agenlang.acp",
-    "mcp": "agenlang.mcp",
-    "fipa": "agenlang.fipa",
-    "anp": "agenlang.anp",
     "a2a": "agenlang.a2a",
 }
 
@@ -89,7 +83,7 @@ class Runtime:
         self.replay_data: list[dict[str, Any]] = []
         self._decision_points: list[dict[str, Any]] = []
         self._step_outputs: dict[int, str] = {}
-        self._lock = threading.Lock()
+        self._ledger = SignedLedger()
         # Encrypted memory default (production)
         self.memory: Any = EncryptedMemoryBackend(
             self.execution_id,
@@ -112,18 +106,8 @@ class Runtime:
         loaded_memory = self.memory.load()
         log.debug("memory_loaded", memory=loaded_memory)
 
-        # Execute steps based on workflow type
-        workflow_type = self.contract.workflow.type
         steps = self.contract.workflow.steps
-
-        if workflow_type == "sequence":
-            self._run_sequence(steps)
-        elif workflow_type == "parallel":
-            self._run_parallel(steps)
-        elif workflow_type == "probabilistic":
-            self._run_probabilistic(steps)
-        else:
-            raise ValueError(f"Unknown workflow type: {workflow_type}")
+        self._run_sequence(steps)
 
         # Handoff real step outputs (whitelisted by memory_contract keys)
         step_outputs = {}
@@ -165,6 +149,7 @@ class Runtime:
                 "rate": self.contract.settlement.rate,
                 "total_joules_owed": joules_used * self.contract.settlement.rate,
             },
+            "ledger_entries": self._ledger.to_dict(),
         }
 
         # Save replay file with HMAC integrity
@@ -218,65 +203,6 @@ class Runtime:
             self._execute_step_with_error_handler(step, resolved_args)
             self.steps_executed += 1
 
-    def _run_parallel(self, steps: list) -> None:
-        """Execute all steps concurrently via ThreadPoolExecutor."""
-        max_workers = self.contract.workflow.max_concurrency
-        log.info(
-            "workflow_parallel",
-            branches=len(steps),
-            max_concurrency=max_workers,
-        )
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = []
-            for idx, step in enumerate(steps):
-                with self._lock:
-                    if self._joules_used >= self.contract.constraints.joule_budget:
-                        raise ValueError("Joule budget exhausted")
-                    self._decision_points.append(
-                        {
-                            "type": "parallel_branch",
-                            "location": f"branch_{idx}",
-                            "rationale": f"independent branch {idx}/{len(steps)}",
-                            "chosen": True,
-                        }
-                    )
-                futures.append(
-                    executor.submit(self._execute_parallel_branch, idx, step)
-                )
-            for future in futures:
-                future.result()
-
-    def _execute_parallel_branch(self, idx: int, step: Any) -> None:
-        """Execute a single parallel branch with thread-safe mutations."""
-        resolved_args, _skip = self._resolve_step_args(step, idx)
-        self._execute_step_with_error_handler(step, resolved_args)
-        with self._lock:
-            self.steps_executed += 1
-
-    def _run_probabilistic(self, steps: list) -> None:
-        """Weighted random selection from steps."""
-        if not steps:
-            raise ValueError("Probabilistic workflow requires at least one step")
-        weights = [
-            (s.weight if hasattr(s, "weight") else s.get("weight", 1.0)) for s in steps
-        ]
-        chosen = random.choices(steps, weights=weights, k=1)[0]
-        chosen_idx = steps.index(chosen)
-        for idx, step in enumerate(steps):
-            w = weights[idx]
-            self._decision_points.append(
-                {
-                    "type": "probabilistic_choice",
-                    "location": f"step_{idx}",
-                    "rationale": f"weight={w}, selected={'yes' if idx == chosen_idx else 'no'}",
-                    "chosen": idx == chosen_idx,
-                }
-            )
-        if self._joules_used >= self.contract.constraints.joule_budget:
-            raise ValueError("Joule budget exhausted")
-        self._execute_step_with_error_handler(chosen)
-        self.steps_executed += 1
-
     def _compute_reputation_score(self, joules_used: float) -> float:
         """Compute reputation score from SER (JouleWork futures)."""
         budget = self.contract.constraints.joule_budget
@@ -318,7 +244,7 @@ class Runtime:
         """Execute a single step (tool, skill, subcontract, embed).
 
         Supports protocol auto-detect via 'protocol:target' syntax
-        (e.g., 'acp:agent-id', 'mcp:tool-name').
+        (e.g., 'a2a:agent-id').
 
         Args:
             step: Workflow step (WorkflowStep model or dict).
@@ -345,10 +271,18 @@ class Runtime:
                 output = _dispatch_protocol(
                     protocol, target, action, args, self.contract
                 )
-                self._joules_used += 100.0
+                joule_cost = 100.0
+                self._joules_used += joule_cost
                 step_idx = len(self.replay_data)
                 self.replay_data.append({"step": raw_target, "output": output})
                 self._step_outputs[step_idx] = output
+                km = self._get_key_manager()
+                self._ledger.append_entry(
+                    "debit",
+                    joule_cost,
+                    self.contract.settlement.joule_recipient,
+                    km,
+                )
                 log.info(
                     "protocol_dispatched",
                     protocol=protocol,
@@ -371,6 +305,13 @@ class Runtime:
                         step_idx = len(self.replay_data)
                         self.replay_data.append({"step": target, "output": output})
                         self._step_outputs[step_idx] = output
+                        km = self._get_key_manager()
+                        self._ledger.append_entry(
+                            "debit",
+                            joule_cost,
+                            self.contract.settlement.joule_recipient,
+                            km,
+                        )
                         log.info("tool_executed", tool=target, output=output)
                     else:
                         raise ValueError(f"Capability violation for tool {target}")
@@ -378,17 +319,15 @@ class Runtime:
                     raise ValueError(f"Unknown tool {target}")
             elif action == "skill":
                 raise NotImplementedError(
-                    f"skill:{target} — use protocol prefix "
-                    "(e.g. acp:{target}, mcp:{target})"
+                    f"skill:{target} — use protocol prefix (e.g. a2a:{target})"
                 )
             elif action == "subcontract":
                 raise NotImplementedError(
-                    f"subcontract:{target} — use protocol prefix "
-                    "(e.g. acp:{target}, anp:{target})"
+                    f"subcontract:{target} — use protocol prefix (e.g. a2a:{target})"
                 )
             elif action == "embed":
                 raise NotImplementedError(
-                    f"embed:{target} — use protocol prefix " "(e.g. mcp:{target})"
+                    f"embed:{target} — use protocol prefix (e.g. a2a:{target})"
                 )
             else:
                 log.info("step_executing", action=action, target=target)

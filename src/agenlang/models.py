@@ -39,17 +39,15 @@ class WorkflowStep(BaseModel):
     action: Literal["tool", "skill", "subcontract", "embed"]
     target: str
     args: dict[str, Any] = Field(default_factory=dict)
-    weight: float = Field(default=1.0, ge=0)
     on_error: Optional[ErrorHandler] = None
 
 
 class Workflow(BaseModel):
     """Workflow definition with steps and optional error handler."""
 
-    type: Literal["sequence", "parallel", "probabilistic"]
+    type: Literal["sequence"]
     steps: list[WorkflowStep]
     on_error: Optional[ErrorHandler] = None
-    max_concurrency: int = Field(default=5, ge=1)
 
 
 class Constraints(BaseModel):

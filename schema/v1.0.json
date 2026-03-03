@@ -44,7 +44,7 @@
     "workflow": {
       "type": "object",
       "properties": {
-        "type": { "type": "string", "enum": ["sequence", "parallel", "probabilistic"] },
+        "type": { "type": "string", "enum": ["sequence"] },
         "steps": {
           "type": "array",
           "items": {
@@ -53,14 +53,12 @@
               "action": { "type": "string", "enum": ["tool", "skill", "subcontract", "embed"] },
               "target": { "type": "string" },
               "args": { "type": "object" },
-              "weight": { "type": "number", "minimum": 0, "default": 1.0 },
               "on_error": { "$ref": "#/definitions/error_handler" }
             },
             "required": ["action", "target"]
           }
         },
-        "on_error": { "$ref": "#/definitions/error_handler" },
-        "max_concurrency": { "type": "integer", "minimum": 1, "default": 5 }
+        "on_error": { "$ref": "#/definitions/error_handler" }
       },
       "required": ["type", "steps"]
     },
