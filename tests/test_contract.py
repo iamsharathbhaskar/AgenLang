@@ -118,3 +118,63 @@ def test_contract_fuzz_valid(goal: str, joule_budget: float) -> None:
     c = Contract.model_validate(data)
     assert c.goal == goal
     assert c.constraints.joule_budget == joule_budget
+
+
+def _make_valid_data(**overrides: object) -> dict:
+    """Build a valid contract dict with optional overrides."""
+    import secrets
+
+    base = {
+        "agenlang_version": "1.0",
+        "contract_id": f"urn:agenlang:exec:{secrets.token_hex(16)}",
+        "issuer": {"agent_id": "test", "pubkey": "pk"},
+        "goal": "test goal",
+        "intent_anchor": {"hash": "sha256:test"},
+        "constraints": {"joule_budget": 1000},
+        "workflow": {
+            "type": "sequence",
+            "steps": [
+                {"action": "tool", "target": "web_search", "args": {"query": "test"}}
+            ],
+        },
+        "memory_contract": {"handoff_keys": [], "ttl": "1h"},
+        "settlement": {"joule_recipient": "r", "rate": 1.0},
+        "capability_attestations": [{"capability": "net:read", "proof": "p"}],
+    }
+    base.update(overrides)
+    return base
+
+
+def test_contract_rejects_openai_key() -> None:
+    """Contract with OpenAI API key pattern raises ValueError."""
+    data = _make_valid_data(goal="Use sk-abcdefghijklmnopqrstuvwx to summarize")
+    with pytest.raises(ValueError, match="embedded API key"):
+        Contract.from_dict(data)
+
+
+def test_contract_rejects_xai_key() -> None:
+    """Contract with xAI API key pattern raises ValueError."""
+    data = _make_valid_data(goal="Use xai-abcdefghijklmnopqrstuvwx for inference")
+    with pytest.raises(ValueError, match="embedded API key"):
+        Contract.from_dict(data)
+
+
+def test_contract_rejects_tavily_key() -> None:
+    """Contract with Tavily API key pattern raises ValueError."""
+    data = _make_valid_data(goal="Use tvly-abcdefghijklmnopqrstuvwx for search")
+    with pytest.raises(ValueError, match="embedded API key"):
+        Contract.from_dict(data)
+
+
+def test_contract_rejects_key_via_model_validate() -> None:
+    """model_validate also rejects embedded keys."""
+    data = _make_valid_data(goal="secret sk-1234567890abcdefghij1234 in goal")
+    with pytest.raises(ValueError, match="embedded API key"):
+        Contract.model_validate(data)
+
+
+def test_contract_allows_normal_strings() -> None:
+    """Normal contract strings pass leak detection."""
+    data = _make_valid_data(goal="Book a flight from LAX to SFO under $150")
+    c = Contract.from_dict(data)
+    assert c.goal == "Book a flight from LAX to SFO under $150"

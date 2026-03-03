@@ -153,3 +153,32 @@ def test_mcp_fastapi_app_routes() -> None:
             assert "result" in rpc.json()
 
     asyncio.run(_test())
+
+
+def test_mcp_info_route() -> None:
+    """FastAPI MCP app exposes GET /info with server metadata."""
+    from agenlang.mcp import create_mcp_app
+
+    try:
+        from httpx import ASGITransport, AsyncClient
+    except ImportError:
+        import pytest
+
+        pytest.skip("httpx not available")
+        return
+
+    import asyncio
+
+    app = create_mcp_app()
+
+    async def _test() -> None:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.get("/info")
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["name"] == "agenlang"
+            assert "version" in data
+            assert len(data["tools"]) >= 1
+
+    asyncio.run(_test())

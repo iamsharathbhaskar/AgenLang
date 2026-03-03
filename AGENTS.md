@@ -15,7 +15,8 @@ AgenLang is a standardised JSON contract substrate for secure, auditable, econom
 pip install -e ".[dev]"
 # For real tools:
 export TAVILY_API_KEY=...
-export XAI_API_KEY=...
+export LLM_PROVIDER=xai          # or openai, anthropic, generic
+export LLM_API_KEY=...           # falls back to XAI_API_KEY/OPENAI_API_KEY/ANTHROPIC_API_KEY
 agenlang run examples/amazo-flight-booking.json
 ```
 
@@ -25,10 +26,11 @@ agenlang run examples/amazo-flight-booking.json
 - `src/agenlang/runtime.py` — Workflow dispatcher, Joule metering, SER, protocol auto-detect
 - `src/agenlang/keys.py` — KeyManager (ECDSA + SER HMAC)
 - `src/agenlang/memory.py` — StorageBackend ABC, Encrypted (AES-GCM), SQLite, Redis, and plain backends
-- `src/agenlang/tools.py` — Tavily web_search + Grok summarize (env var gated)
+- `src/agenlang/tools.py` — Tavily web_search + LLM summarize (multi-provider via LLMConfig)
 - `src/agenlang/settlement.py` — Pluggable settlement backends (Stub, Helium)
 - `src/agenlang/solana.py` — Solana RPC settlement backend (devnet, Helius-compatible)
-- `src/agenlang/utils.py` — Shared utilities (retry_with_backoff decorator)
+- `src/agenlang/utils.py` — Shared utilities (retry_with_backoff, LLMConfig)
+- `agenlang_skills.md` — How to register AgenLang as a skill/tool in LangChain/CrewAI/OpenClaw
 - `src/agenlang/cli.py` — Click CLI entry point
 
 ### Protocol Adapters

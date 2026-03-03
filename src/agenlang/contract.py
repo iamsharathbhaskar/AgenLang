@@ -7,6 +7,7 @@ AgenLang v1.0 JSON schema. Supports ECDSA signing and verification.
 import base64
 import importlib.resources
 import json
+import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, Optional
 
@@ -26,6 +27,25 @@ from .models import (
 
 if TYPE_CHECKING:
     from .keys import KeyManager
+
+_KEY_PATTERNS = [
+    re.compile(r"sk-[a-zA-Z0-9]{20,}"),
+    re.compile(r"sk-ant-[a-zA-Z0-9]{20,}"),
+    re.compile(r"xai-[a-zA-Z0-9]{20,}"),
+    re.compile(r"tvly-[a-zA-Z0-9]{20,}"),
+    re.compile(r"[A-Za-z0-9]{32,}_secret_[A-Za-z0-9]+"),
+]
+
+
+def _check_for_leaked_keys(data: Dict[str, Any]) -> None:
+    """Raise ValueError if the contract data contains API key patterns."""
+    text = json.dumps(data)
+    for pattern in _KEY_PATTERNS:
+        if pattern.search(text):
+            raise ValueError(
+                "Contract contains embedded API key pattern — "
+                "remove before submitting"
+            )
 
 
 def _load_schema() -> dict:
@@ -67,6 +87,13 @@ class Contract(BaseModel):
     ser: Optional[Dict[str, Any]] = None
 
     @classmethod
+    def model_validate(cls, obj: Any, **kwargs: Any) -> "Contract":  # type: ignore[override]
+        """Validate with API key leak check."""
+        if isinstance(obj, dict):
+            _check_for_leaked_keys(obj)
+        return super().model_validate(obj, **kwargs)
+
+    @classmethod
     def from_file(cls, path: str) -> "Contract":
         """Load a contract from JSON file and validate against schema.
 
@@ -93,8 +120,9 @@ class Contract(BaseModel):
             Validated Contract instance.
 
         Raises:
-            ValueError: If schema validation fails.
+            ValueError: If schema validation fails or embedded keys detected.
         """
+        _check_for_leaked_keys(data)
         schema = _load_schema()
         try:
             validate(instance=data, schema=schema)

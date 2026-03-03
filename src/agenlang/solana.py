@@ -6,6 +6,7 @@ Replaces fictional Helium endpoint with real Solana infrastructure.
 
 import os
 import uuid
+import warnings
 from typing import Any, Dict
 
 import requests  # type: ignore[import-untyped]
@@ -21,8 +22,8 @@ DEFAULT_RPC_URL = "https://api.devnet.solana.com"
 class SolanaBackend(SettlementBackend):
     """Solana RPC settlement backend for IOT token transfers.
 
-    Supports Helius-authenticated endpoints via HELIUM_API_KEY env var,
-    public Solana devnet RPC as fallback, and stub mode for testing.
+    Reads HELIUS_API_KEY first, falls back to deprecated HELIUM_API_KEY.
+    Public Solana devnet RPC used when no key is set. Stub mode for testing.
     """
 
     def __init__(
@@ -33,7 +34,16 @@ class SolanaBackend(SettlementBackend):
         self._stub_mode = rpc_url.startswith("stub:")
         self.api_key = ""
         if not self._stub_mode:
-            self.api_key = os.environ.get("HELIUM_API_KEY", "")
+            self.api_key = os.environ.get("HELIUS_API_KEY", "")
+            if not self.api_key:
+                legacy = os.environ.get("HELIUM_API_KEY", "")
+                if legacy:
+                    warnings.warn(
+                        "HELIUM_API_KEY is deprecated, use HELIUS_API_KEY instead",
+                        DeprecationWarning,
+                        stacklevel=2,
+                    )
+                    self.api_key = legacy
             if self.api_key and "helius" not in rpc_url:
                 self.rpc_url = f"https://devnet.helius-rpc.com/?api-key={self.api_key}"
 

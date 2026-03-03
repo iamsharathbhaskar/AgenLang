@@ -1,7 +1,7 @@
 """ANP (Agent Network Protocol) P2P contract exchange adapter.
 
 Provides DID derivation from KeyManager ECDSA keys, envelope signing,
-verification, and peer-to-peer contract exchange over HTTP.
+verification, and peer-to-peer contract exchange over HTTP and WebSocket.
 """
 
 import base64
@@ -146,19 +146,92 @@ def exchange_contract(
     return resp.json()
 
 
-class GossipNode:
-    """ANP gossip simulation node for P2P contract broadcasting.
+def ws_exchange_contract_sync(
+    ws_url: str, contract: Contract, km: KeyManager, timeout: int = 30
+) -> Dict[str, Any]:
+    """Exchange contract over WebSocket (synchronous, websocket-client).
 
-    Broadcasts contracts to a list of known peers and simulates
-    multi-round gossip propagation.
+    Args:
+        ws_url: Peer's WebSocket URL (ws:// or wss://).
+        contract: Contract to exchange.
+        km: KeyManager for signing.
+        timeout: Connection timeout.
+
+    Returns:
+        Response dict from the peer.
+    """
+    try:
+        import websocket as ws_client  # type: ignore[import-untyped]
+    except ImportError:
+        log.warning("websocket_client_unavailable", fallback="http")
+        http_url = ws_url.replace("ws://", "http://").replace("wss://", "https://")
+        return exchange_contract(http_url, contract, km, timeout=timeout)
+
+    envelope = create_anp_envelope(contract, km)
+    payload = json.dumps(envelope)
+    ws = ws_client.create_connection(ws_url, timeout=timeout)
+    try:
+        ws.send(payload)
+        response = ws.recv()
+        log.info("anp_ws_exchange_complete", url=ws_url)
+        return json.loads(response)
+    finally:
+        ws.close()
+
+
+async def ws_exchange_contract_async(
+    ws_url: str, contract: Contract, km: KeyManager, timeout: int = 30
+) -> Dict[str, Any]:
+    """Exchange contract over WebSocket (async, websockets library).
+
+    Args:
+        ws_url: Peer's WebSocket URL (ws:// or wss://).
+        contract: Contract to exchange.
+        km: KeyManager for signing.
+        timeout: Connection timeout.
+
+    Returns:
+        Response dict from the peer.
+    """
+    try:
+        import asyncio
+
+        import websockets  # type: ignore[import-untyped]
+    except ImportError:
+        log.warning("websockets_unavailable", fallback="sync")
+        return ws_exchange_contract_sync(ws_url, contract, km, timeout)
+
+    envelope = create_anp_envelope(contract, km)
+    payload = json.dumps(envelope)
+    async with websockets.connect(ws_url, close_timeout=timeout) as ws:
+        await ws.send(payload)
+        response = await asyncio.wait_for(ws.recv(), timeout=timeout)
+        log.info("anp_ws_async_exchange_complete", url=ws_url)
+        return json.loads(response)
+
+
+def _is_ws_url(url: str) -> bool:
+    return url.startswith("ws://") or url.startswith("wss://")
+
+
+class GossipNode:
+    """ANP gossip node for P2P contract broadcasting over HTTP or WebSocket.
+
+    Automatically routes to WebSocket for ws:// URLs and HTTP for http:// URLs.
     """
 
     def __init__(self, km: KeyManager, peers: list[str]) -> None:
         self.km = km
         self.peers = list(peers)
 
+    def _exchange(self, peer_url: str, contract: Contract) -> Dict[str, Any]:
+        """Route to WebSocket or HTTP based on URL scheme."""
+        if _is_ws_url(peer_url):
+            return ws_exchange_contract_sync(peer_url, contract, self.km)
+        return exchange_contract(peer_url, contract, self.km)
+
     def broadcast_contract(self, contract: Contract) -> list[Dict[str, Any]]:
-        """Send ANP envelope to all known peers.
+        """Send ANP envelope to all known peers (HTTP or WebSocket).
 
         Returns:
             List of response dicts from each peer.
@@ -166,7 +239,7 @@ class GossipNode:
         results: list[Dict[str, Any]] = []
         for peer_url in self.peers:
             try:
-                resp = exchange_contract(peer_url, contract, self.km)
+                resp = self._exchange(peer_url, contract)
                 results.append({"peer": peer_url, "status": "ok", "response": resp})
             except Exception as e:
                 log.warning("gossip_broadcast_error", peer=peer_url, error=str(e))

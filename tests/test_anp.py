@@ -137,3 +137,77 @@ def test_simulate_gossip(tmp_path: Path) -> None:
 
     assert len(results) >= 2
     assert "https://new-peer.example.com" in node.peers
+
+
+def test_ws_exchange_contract_sync_fallback(tmp_path: Path) -> None:
+    """ws_exchange_contract_sync falls back to HTTP when websocket-client not available."""
+    from agenlang.anp import ws_exchange_contract_sync
+
+    km = KeyManager(key_path=tmp_path / "keys.pem")
+    km.generate()
+    contract = _load_contract()
+
+    with (
+        patch.dict("sys.modules", {"websocket": None}),
+        patch("agenlang.anp.requests.post") as mock_post,
+    ):
+        mock_post.return_value.raise_for_status = lambda: None
+        mock_post.return_value.json.return_value = {"status": "accepted"}
+        result = ws_exchange_contract_sync("ws://peer.example.com/anp", contract, km)
+    assert result["status"] == "accepted"
+
+
+def test_ws_exchange_contract_sync_success(tmp_path: Path) -> None:
+    """ws_exchange_contract_sync sends via WebSocket when available."""
+    from unittest.mock import MagicMock
+
+    from agenlang.anp import ws_exchange_contract_sync
+
+    km = KeyManager(key_path=tmp_path / "keys.pem")
+    km.generate()
+    contract = _load_contract()
+
+    mock_ws_module = MagicMock()
+    mock_conn = MagicMock()
+    mock_ws_module.create_connection.return_value = mock_conn
+    mock_conn.recv.return_value = json.dumps({"status": "ws_accepted"})
+
+    with patch.dict("sys.modules", {"websocket": mock_ws_module}):
+        result = ws_exchange_contract_sync("ws://peer.example.com/anp", contract, km)
+    assert result["status"] == "ws_accepted"
+    mock_conn.send.assert_called_once()
+    mock_conn.close.assert_called_once()
+
+
+def test_gossip_node_ws_routing(tmp_path: Path) -> None:
+    """GossipNode routes ws:// URLs to WebSocket exchange."""
+    from unittest.mock import MagicMock
+
+    from agenlang.anp import GossipNode
+
+    km = KeyManager(key_path=tmp_path / "keys.pem")
+    km.generate()
+    contract = _load_contract()
+
+    mock_ws_module = MagicMock()
+    mock_conn = MagicMock()
+    mock_ws_module.create_connection.return_value = mock_conn
+    mock_conn.recv.return_value = json.dumps({"status": "ws_ok"})
+
+    node = GossipNode(
+        km, ["ws://peer1.example.com/anp", "https://peer2.example.com/anp"]
+    )
+
+    with (
+        patch.dict("sys.modules", {"websocket": mock_ws_module}),
+        patch("agenlang.anp.requests.post") as mock_http,
+    ):
+        mock_http.return_value.raise_for_status = lambda: None
+        mock_http.return_value.json.return_value = {"status": "http_ok"}
+        results = node.broadcast_contract(contract)
+
+    assert len(results) == 2
+    ws_result = next(r for r in results if r["peer"].startswith("ws://"))
+    http_result = next(r for r in results if r["peer"].startswith("https://"))
+    assert ws_result["status"] == "ok"
+    assert http_result["status"] == "ok"

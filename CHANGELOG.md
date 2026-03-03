@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.3.4] — 2026-03-03
+
+### Added
+- `agenlang_skills.md` with LangChain, CrewAI, OpenClaw, MCP, and custom tool registration examples
+- MCP server `/info` route, env-based `MCP_HOST`/`MCP_PORT` config, `__main__` entry, startup/shutdown logging
+- WebSocket gossip in `anp.py`: `ws_exchange_contract_sync` (websocket-client), `ws_exchange_contract_async` (websockets)
+- `GossipNode` auto-routes `ws://`/`wss://` to WebSocket, `http://`/`https://` to HTTP
+- `LLMConfig` in `utils.py`: provider-agnostic config for OpenAI, Anthropic, xAI, and generic HTTP
+- API key leak prevention: `_check_for_leaked_keys()` rejects contracts with embedded key patterns
+- Multi-protocol E2E tests: ACP->AG-UI, ANP->MCP, full protocol chain
+- `HELIUS_API_KEY` priority with `HELIUM_API_KEY` deprecated fallback in `solana.py`
+- Dev dependencies: `websockets`, `websocket-client`
+
+### Changed
+- `_summarize_grok` renamed to `_summarize_llm`, uses `LLMConfig.from_env()` for multi-provider support
+- `Contract.model_validate()` and `Contract.from_dict()` now scan for leaked API keys
+- `SolanaBackend` reads `HELIUS_API_KEY` first, falls back to `HELIUM_API_KEY` with deprecation warning
+- `start_mcp_server()` reads `MCP_HOST`/`MCP_PORT` env vars
+
 ## [0.3.3] — 2026-03-03
 
 ### Added

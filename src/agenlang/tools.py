@@ -1,6 +1,7 @@
 """AgenLang Tool Registry - verified tools with capability declarations.
 
-Real implementations: Tavily Search API (web_search), Grok API (summarize).
+Real implementations: Tavily Search API (web_search), LLM summarize
+(OpenAI/Anthropic/xAI/generic via LLMConfig).
 No dummy string returns; requires API keys when invoking.
 """
 
@@ -32,24 +33,48 @@ def _web_search_tavily(args: Dict[str, Any]) -> str:
     )
 
 
-def _summarize_grok(args: Dict[str, Any]) -> str:
-    """Summarize text via Grok API (xAI)."""
-    api_key = os.environ.get("XAI_API_KEY")
-    if not api_key:
-        raise ValueError(
-            "XAI_API_KEY required for summarize. " "Get one at https://console.x.ai"
-        )
+def _summarize_llm(args: Dict[str, Any]) -> str:
+    """Summarize text via configurable LLM provider (OpenAI, Anthropic, xAI, generic)."""
+    from .utils import LLMConfig
+
+    config = LLMConfig.from_env()
     import requests  # type: ignore[import-untyped]
 
     text = args.get("text", "")
+
+    if config.provider == "anthropic":
+        resp = requests.post(
+            f"{config.base_url}/messages",
+            headers={
+                "x-api-key": config.api_key,
+                "anthropic-version": "2023-06-01",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": config.model,
+                "max_tokens": 500,
+                "messages": [
+                    {"role": "user", "content": f"Summarize concisely:\n\n{text}"},
+                ],
+            },
+            timeout=30,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        content = data.get("content", [{}])
+        if content:
+            return content[0].get("text", "No summary generated.")
+        return "No summary generated."
+
+    # OpenAI-compatible (openai, xai, generic)
     resp = requests.post(
-        "https://api.x.ai/v1/chat/completions",
+        f"{config.base_url}/chat/completions",
         headers={
-            "Authorization": f"Bearer {api_key}",
+            "Authorization": f"Bearer {config.api_key}",
             "Content-Type": "application/json",
         },
         json={
-            "model": "grok-3-mini",
+            "model": config.model,
             "messages": [
                 {"role": "user", "content": f"Summarize concisely:\n\n{text}"},
             ],
@@ -82,8 +107,8 @@ def _make_pluggable_registry() -> Dict[str, Dict[str, Any]]:
         },
         "summarize": {
             "capabilities": ["compute:read"],
-            "function": _summarize_grok,
-            "description": "Summarize text via Grok API.",
+            "function": _summarize_llm,
+            "description": "Summarize text via LLM (OpenAI/Anthropic/xAI/generic).",
             "joule_cost": SUMMARIZE_JOULES,
         },
     }

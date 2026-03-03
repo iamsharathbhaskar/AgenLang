@@ -30,6 +30,7 @@ def test_solana_backend_stub_mode() -> None:
 
 def test_solana_backend_success_path(monkeypatch: pytest.MonkeyPatch) -> None:
     """SolanaBackend success path with mocked Solana RPC."""
+    monkeypatch.delenv("HELIUS_API_KEY", raising=False)
     monkeypatch.delenv("HELIUM_API_KEY", raising=False)
 
     blockhash_resp = MagicMock()
@@ -59,6 +60,7 @@ def test_solana_backend_success_path(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_solana_backend_rpc_error(monkeypatch: pytest.MonkeyPatch) -> None:
     """SolanaBackend handles RPC errors gracefully."""
+    monkeypatch.delenv("HELIUS_API_KEY", raising=False)
     monkeypatch.delenv("HELIUM_API_KEY", raising=False)
 
     mock_resp = MagicMock()
@@ -78,6 +80,7 @@ def test_solana_backend_rpc_error(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_solana_backend_http_error(monkeypatch: pytest.MonkeyPatch) -> None:
     """SolanaBackend handles HTTP failures."""
+    monkeypatch.delenv("HELIUS_API_KEY", raising=False)
     monkeypatch.delenv("HELIUM_API_KEY", raising=False)
 
     with patch(
@@ -91,8 +94,33 @@ def test_solana_backend_http_error(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_solana_backend_helius_key(monkeypatch: pytest.MonkeyPatch) -> None:
-    """SolanaBackend uses Helius RPC when HELIUM_API_KEY is set."""
-    monkeypatch.setenv("HELIUM_API_KEY", "test-key-123")
+    """SolanaBackend uses Helius RPC when HELIUS_API_KEY is set."""
+    monkeypatch.delenv("HELIUM_API_KEY", raising=False)
+    monkeypatch.setenv("HELIUS_API_KEY", "helius-key-456")
     backend = SolanaBackend()
     assert "helius" in backend.rpc_url
-    assert "test-key-123" in backend.rpc_url
+    assert "helius-key-456" in backend.rpc_url
+
+
+def test_solana_backend_helium_key_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    """SolanaBackend falls back to HELIUM_API_KEY with deprecation warning."""
+    monkeypatch.delenv("HELIUS_API_KEY", raising=False)
+    monkeypatch.setenv("HELIUM_API_KEY", "legacy-key-789")
+    import warnings
+
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        backend = SolanaBackend()
+    assert "helius" in backend.rpc_url
+    assert "legacy-key-789" in backend.rpc_url
+    assert len(w) == 1
+    assert "deprecated" in str(w[0].message).lower()
+
+
+def test_solana_backend_helius_priority(monkeypatch: pytest.MonkeyPatch) -> None:
+    """HELIUS_API_KEY takes priority over HELIUM_API_KEY."""
+    monkeypatch.setenv("HELIUS_API_KEY", "primary-key")
+    monkeypatch.setenv("HELIUM_API_KEY", "legacy-key")
+    backend = SolanaBackend()
+    assert "primary-key" in backend.rpc_url
+    assert "legacy-key" not in backend.rpc_url

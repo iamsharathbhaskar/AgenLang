@@ -2,9 +2,12 @@
 
 Registers AgenLang contract execution as an MCP-compatible tool using
 JSON-RPC 2.0 format. No mcp SDK dependency required.
+
+Run as standalone server: python -m agenlang.mcp
 """
 
 import json
+import os
 from typing import Any, Dict
 
 import structlog
@@ -159,12 +162,13 @@ def handle_jsonrpc_request(request: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def create_mcp_app() -> Any:
-    """Create a FastAPI app exposing MCP JSON-RPC and health endpoints.
+    """Create a FastAPI app exposing MCP JSON-RPC, health, info, and tools endpoints.
 
-    Returns a FastAPI application with POST /jsonrpc, GET /health,
-    and GET /tools routes. Falls back gracefully if FastAPI is not installed.
+    Returns a FastAPI application. Falls back gracefully if FastAPI is not installed.
     """
     try:
+        from contextlib import asynccontextmanager
+
         from fastapi import FastAPI, Request
         from fastapi.responses import JSONResponse
     except ImportError:
@@ -173,11 +177,21 @@ def create_mcp_app() -> Any:
             "Install with: pip install fastapi uvicorn"
         )
 
-    app = FastAPI(title="AgenLang MCP Server", version="1.0")
+    @asynccontextmanager
+    async def lifespan(app: Any) -> Any:
+        log.info("mcp_server_starting")
+        yield
+        log.info("mcp_server_shutdown")
+
+    app = FastAPI(title="AgenLang MCP Server", version="1.0", lifespan=lifespan)
 
     @app.get("/health")
     async def health() -> Dict[str, str]:
         return {"status": "ok"}
+
+    @app.get("/info")
+    async def info() -> Dict[str, Any]:
+        return mcp_server_info()
 
     @app.get("/tools")
     async def tools() -> Dict[str, Any]:
@@ -192,12 +206,11 @@ def create_mcp_app() -> Any:
     return app
 
 
-def start_mcp_server(host: str = "0.0.0.0", port: int = 8716) -> None:
+def start_mcp_server(host: str | None = None, port: int | None = None) -> None:
     """Start the MCP HTTP server via uvicorn.
 
-    Args:
-        host: Bind address.
-        port: Listen port.
+    Host and port can be set via MCP_HOST / MCP_PORT env vars,
+    function arguments, or defaults (0.0.0.0:8716).
     """
     try:
         import uvicorn  # type: ignore[import-untyped]
@@ -206,8 +219,15 @@ def start_mcp_server(host: str = "0.0.0.0", port: int = 8716) -> None:
             "uvicorn required for MCP HTTP server. " "Install with: pip install uvicorn"
         )
 
+    resolved_host = host or os.environ.get("MCP_HOST", "0.0.0.0")
+    resolved_port = port or int(os.environ.get("MCP_PORT", "8716"))
     app = create_mcp_app()
-    uvicorn.run(app, host=host, port=port)
+    log.info(
+        "mcp_server_starting",
+        host=resolved_host,
+        port=resolved_port,
+    )
+    uvicorn.run(app, host=resolved_host, port=resolved_port)
 
 
 def dispatch(
@@ -238,3 +258,7 @@ def dispatch(
     }
     result = handle_jsonrpc_request(request)
     return json.dumps(result)
+
+
+if __name__ == "__main__":
+    start_mcp_server()

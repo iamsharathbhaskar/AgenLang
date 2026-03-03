@@ -29,7 +29,8 @@ pip install agenlang
 ```bash
 # Set API keys for real tool execution
 export TAVILY_API_KEY="your-tavily-key"
-export XAI_API_KEY="your-xai-key"
+export LLM_PROVIDER="xai"          # or openai, anthropic, generic
+export LLM_API_KEY="your-api-key"  # falls back to XAI_API_KEY/OPENAI_API_KEY/ANTHROPIC_API_KEY
 
 # Run a contract from a JSON file
 agenlang run examples/amazo-flight-booking.json
@@ -175,4 +176,5 @@ receipt = SolanaBackend().settle("recipient-agent", 100.0, 0.001)
 **Documentation**
 
 - [AGENTS.md](AGENTS.md) — Project context, Do Not rules, checkpoint card
+- [agenlang_skills.md](agenlang_skills.md) — Register AgenLang in LangChain/CrewAI/OpenClaw
 - [threat_model.md](threat_model.md) — NIST SP 800-53 threat matrix
