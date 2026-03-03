@@ -4,8 +4,16 @@ __pycache__/
 *.pyo
 *.replay
 *.ser.json
+*.memory.db
+*.memory.enc
+*.memory.json
 .DS_Store
 *.egg-info/
 .coverage
 .hypothesis/
+.pytest_cache/
+.mypy_cache/
+.Rhistory
+dist/
+build/
 PROTOCOL.md
