@@ -14,6 +14,7 @@ import structlog
 
 from .contract import Contract
 from .keys import KeyManager
+from .utils import retry_with_backoff
 
 log = structlog.get_logger()
 
@@ -118,6 +119,7 @@ def verify_anp_envelope(envelope: Dict[str, Any], km: KeyManager) -> bool:
     return km.verify(payload.encode(), sig_bytes, pub_pem)
 
 
+@retry_with_backoff(max_retries=3, base_delay=0.5, timeout=30.0)
 def exchange_contract(
     url: str, contract: Contract, km: KeyManager, timeout: int = 30
 ) -> Dict[str, Any]:
@@ -142,6 +144,67 @@ def exchange_contract(
     resp.raise_for_status()
     log.info("anp_exchange_complete", url=url, sender=envelope["sender_did"])
     return resp.json()
+
+
+class GossipNode:
+    """ANP gossip simulation node for P2P contract broadcasting.
+
+    Broadcasts contracts to a list of known peers and simulates
+    multi-round gossip propagation.
+    """
+
+    def __init__(self, km: KeyManager, peers: list[str]) -> None:
+        self.km = km
+        self.peers = list(peers)
+
+    def broadcast_contract(self, contract: Contract) -> list[Dict[str, Any]]:
+        """Send ANP envelope to all known peers.
+
+        Returns:
+            List of response dicts from each peer.
+        """
+        results: list[Dict[str, Any]] = []
+        for peer_url in self.peers:
+            try:
+                resp = exchange_contract(peer_url, contract, self.km)
+                results.append({"peer": peer_url, "status": "ok", "response": resp})
+            except Exception as e:
+                log.warning("gossip_broadcast_error", peer=peer_url, error=str(e))
+                results.append({"peer": peer_url, "status": "error", "error": str(e)})
+        return results
+
+    def simulate_gossip(
+        self, contract: Contract, rounds: int = 3
+    ) -> list[Dict[str, Any]]:
+        """Simulate multi-round gossip propagation.
+
+        Each round broadcasts to known peers, then discovers new peers
+        from responses and adds them for subsequent rounds.
+
+        Returns:
+            Aggregated list of all round results.
+        """
+        all_results: list[Dict[str, Any]] = []
+        seen_peers = set(self.peers)
+        for round_num in range(rounds):
+            round_results = self.broadcast_contract(contract)
+            all_results.extend(round_results)
+            new_peers: list[str] = []
+            for r in round_results:
+                resp = r.get("response", {})
+                if isinstance(resp, dict):
+                    for p in resp.get("peers", []):
+                        if p not in seen_peers:
+                            new_peers.append(p)
+                            seen_peers.add(p)
+            self.peers.extend(new_peers)
+            log.info(
+                "gossip_round_complete",
+                round=round_num + 1,
+                responses=len(round_results),
+                new_peers=len(new_peers),
+            )
+        return all_results
 
 
 def dispatch(

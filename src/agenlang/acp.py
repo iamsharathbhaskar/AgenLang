@@ -12,6 +12,7 @@ import requests  # type: ignore[import-untyped]
 import structlog
 
 from .contract import Contract
+from .utils import retry_with_backoff
 
 log = structlog.get_logger()
 
@@ -49,6 +50,7 @@ def acp_message_to_contract(msg: Dict[str, Any]) -> Contract:
     return Contract.model_validate(content)
 
 
+@retry_with_backoff(max_retries=3, base_delay=0.5, timeout=30.0)
 def send_acp_message(url: str, contract: Contract, timeout: int = 30) -> Dict[str, Any]:
     """POST an ACP message envelope to a remote ACP endpoint.
 

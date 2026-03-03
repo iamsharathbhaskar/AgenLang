@@ -250,6 +250,45 @@ def test_runtime_parallel_workflow(tmp_path: Path) -> None:
     assert len(branches) == 2
 
 
+def test_runtime_parallel_concurrent(tmp_path: Path) -> None:
+    """Parallel workflow executes steps via ThreadPoolExecutor."""
+    import time
+    from unittest.mock import patch
+
+    km = KeyManager(key_path=tmp_path / "keys.pem")
+    km.generate()
+    contract = Contract.from_file(str(EXAMPLES_DIR / "amazo-flight-booking.json"))
+    object.__setattr__(contract.workflow, "type", "parallel")
+
+    call_times: list[float] = []
+    original_execute_step = Runtime._execute_step_with_error_handler
+
+    def recording_execute(self, step, resolved_args=None):
+        call_times.append(time.monotonic())
+        return original_execute_step(self, step, resolved_args)
+
+    with patch.object(Runtime, "_execute_step_with_error_handler", recording_execute):
+        runtime = Runtime(contract, key_manager=km)
+        result, ser = runtime.execute()
+
+    assert result["status"] == "success"
+    assert result["steps_completed"] == 2
+    assert len(call_times) == 2
+
+
+def test_runtime_max_concurrency(tmp_path: Path) -> None:
+    """max_concurrency field is respected by parallel workflow."""
+    km = KeyManager(key_path=tmp_path / "keys.pem")
+    km.generate()
+    contract = Contract.from_file(str(EXAMPLES_DIR / "amazo-flight-booking.json"))
+    object.__setattr__(contract.workflow, "type", "parallel")
+    contract.workflow.max_concurrency = 1
+    runtime = Runtime(contract, key_manager=km)
+    result, ser = runtime.execute()
+    assert result["status"] == "success"
+    assert result["steps_completed"] == 2
+
+
 def test_runtime_weighted_probabilistic(tmp_path: Path) -> None:
     """Weighted probabilistic uses step weights."""
     from unittest.mock import patch

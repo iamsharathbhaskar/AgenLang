@@ -24,9 +24,11 @@ agenlang run examples/amazo-flight-booking.json
 - `src/agenlang/contract.py` — Contract loading, ECDSA signing/verification
 - `src/agenlang/runtime.py` — Workflow dispatcher, Joule metering, SER, protocol auto-detect
 - `src/agenlang/keys.py` — KeyManager (ECDSA + SER HMAC)
-- `src/agenlang/memory.py` — Encrypted (AES-GCM), SQLite, and plain backends
+- `src/agenlang/memory.py` — StorageBackend ABC, Encrypted (AES-GCM), SQLite, Redis, and plain backends
 - `src/agenlang/tools.py` — Tavily web_search + Grok summarize (env var gated)
 - `src/agenlang/settlement.py` — Pluggable settlement backends (Stub, Helium)
+- `src/agenlang/solana.py` — Solana RPC settlement backend (devnet, Helius-compatible)
+- `src/agenlang/utils.py` — Shared utilities (retry_with_backoff decorator)
 - `src/agenlang/cli.py` — Click CLI entry point
 
 ### Protocol Adapters

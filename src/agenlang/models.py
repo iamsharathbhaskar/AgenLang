@@ -49,6 +49,7 @@ class Workflow(BaseModel):
     type: Literal["sequence", "parallel", "probabilistic"]
     steps: list[WorkflowStep]
     on_error: Optional[ErrorHandler] = None
+    max_concurrency: int = Field(default=5, ge=1)
 
 
 class Constraints(BaseModel):

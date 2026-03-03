@@ -1,11 +1,13 @@
 """AgenLang Memory - handoff and purge with GDPR compliance.
 
-Supports plain JSON, SQLite (default), and AES-GCM encrypted backends.
+Supports plain JSON, SQLite (default), AES-GCM encrypted, and Redis backends.
+All backends implement the StorageBackend ABC.
 """
 
 import json
 import secrets
 import sqlite3
+from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -15,7 +17,26 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 log = structlog.get_logger()
 
 
-class Memory:
+class StorageBackend(ABC):
+    """Abstract base class for all AgenLang memory backends."""
+
+    @abstractmethod
+    def handoff(self, keys: list[str], data: Dict[str, Any]) -> None:
+        """Persist whitelisted keys from data."""
+        ...
+
+    @abstractmethod
+    def load(self) -> Dict[str, Any]:
+        """Load persisted memory."""
+        ...
+
+    @abstractmethod
+    def purge(self) -> None:
+        """Delete all persisted memory."""
+        ...
+
+
+class Memory(StorageBackend):
     """Handles memory handoff and purge with GDPR compliance.
 
     Persists whitelisted keys to a JSON file; supports purge on completion.
@@ -59,7 +80,7 @@ class Memory:
             log.info("memory_purged", data_subject=self.data_subject)
 
 
-class EncryptedMemoryBackend:
+class EncryptedMemoryBackend(StorageBackend):
     """AES-GCM encrypted memory backend with schema validation.
 
     Data is encrypted at rest; only whitelisted keys are persisted.
@@ -114,7 +135,7 @@ class EncryptedMemoryBackend:
             log.info("memory_purged", data_subject=self.data_subject)
 
 
-class SQLiteMemoryBackend:
+class SQLiteMemoryBackend(StorageBackend):
     """SQLite-backed memory (default for production)."""
 
     def __init__(self, contract_id: str, data_subject: str) -> None:
@@ -167,3 +188,61 @@ class SQLiteMemoryBackend:
         if self._db_path.exists():
             self._db_path.unlink()
             log.info("memory_purged", data_subject=self.data_subject)
+
+
+class RedisMemoryBackend(StorageBackend):
+    """Redis-backed memory for scalable, distributed deployments.
+
+    Requires the `redis` package. Falls back with a clear error message
+    if redis is not installed. Each key is stored as agenlang:{contract_id}:{key}.
+    """
+
+    def __init__(
+        self,
+        contract_id: str,
+        redis_url: str = "redis://localhost:6379",
+        ttl_seconds: int = 3600,
+    ) -> None:
+        self.contract_id = contract_id
+        self._prefix = f"agenlang:{contract_id}"
+        self._ttl = ttl_seconds
+        try:
+            import redis as redis_lib  # type: ignore[import-untyped]
+
+            self._client: Any = redis_lib.Redis.from_url(redis_url)
+        except ImportError:
+            raise ImportError(
+                "redis package required for RedisMemoryBackend. "
+                "Install with: pip install redis"
+            )
+
+    def handoff(self, keys: list[str], data: Dict[str, Any]) -> None:
+        """Store whitelisted keys in Redis with TTL."""
+        pipe = self._client.pipeline()
+        for k in keys:
+            redis_key = f"{self._prefix}:{k}"
+            value = json.dumps(data.get(k))
+            pipe.set(redis_key, value, ex=self._ttl)
+        pipe.execute()
+
+    def load(self) -> Dict[str, Any]:
+        """Load all keys matching the contract prefix."""
+        pattern = f"{self._prefix}:*"
+        result: Dict[str, Any] = {}
+        for key in self._client.scan_iter(match=pattern):
+            short_key = key.decode().replace(f"{self._prefix}:", "", 1)
+            raw = self._client.get(key)
+            if raw is not None:
+                try:
+                    result[short_key] = json.loads(raw)
+                except json.JSONDecodeError:
+                    result[short_key] = raw.decode()
+        return result
+
+    def purge(self) -> None:
+        """Delete all keys for this contract."""
+        pattern = f"{self._prefix}:*"
+        keys = list(self._client.scan_iter(match=pattern))
+        if keys:
+            self._client.delete(*keys)
+            log.info("redis_memory_purged", contract_id=self.contract_id)

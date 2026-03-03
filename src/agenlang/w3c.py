@@ -14,6 +14,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.serialization import load_pem_public_key
 
 from .keys import KeyManager
+from .utils import retry_with_backoff
 
 log = structlog.get_logger()
 
@@ -98,6 +99,7 @@ def _did_to_domain(did: str) -> str:
     return "localhost"
 
 
+@retry_with_backoff(max_retries=3, base_delay=0.5, timeout=10.0)
 def resolve_did_web(did: str, timeout: int = 10) -> Dict[str, Any]:
     """Fetch and parse a DID Document from a did:web URL.
 

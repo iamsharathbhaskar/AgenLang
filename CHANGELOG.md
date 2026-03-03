@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.3.3] — 2026-03-03
+
+### Added
+- `SolanaBackend` in `solana.py`: real Solana devnet JSON-RPC settlement (Helius-compatible), stub mode
+- True concurrent parallel execution via `ThreadPoolExecutor` with thread-safe mutations
+- `max_concurrency` field on Workflow model and schema (default: 5)
+- FastAPI-based MCP HTTP server (`create_mcp_app`, `start_mcp_server`) with `/jsonrpc`, `/health`, `/tools`
+- `GossipNode` class in `anp.py` for multi-round P2P contract broadcasting
+- `retry_with_backoff` decorator in `utils.py` (exponential backoff, cumulative timeout)
+- `StorageBackend` ABC in `memory.py` — all backends now subclass it
+- `RedisMemoryBackend` for scalable distributed deployments
+- Token-overhead test using `tiktoken` (asserts <110 token overhead)
+- Adapter Examples section in README with copy-paste snippets for all protocols
+- Mitigation Code References section in `threat_model.md`
+- Dev dependencies: `tiktoken`, `redis`, `fastapi`, `uvicorn`, `httpx`
+
+### Changed
+- `_run_parallel` in `runtime.py` uses `ThreadPoolExecutor` instead of sequential loop
+- All adapter network calls wrapped with `retry_with_backoff`
+- `Memory`, `EncryptedMemoryBackend`, `SQLiteMemoryBackend` now subclass `StorageBackend`
+
 ## [0.3.2] — 2026-03-03
 
 ### Added

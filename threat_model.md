@@ -39,6 +39,23 @@ Mapped to NIST SP 800-53 Rev. 5 control families.
    +-------------+
 ```
 
+## Mitigation Code References
+
+| Threat | Mitigation | File:Line |
+|--------|-----------|-----------|
+| T1 Replay Attack | HMAC-SHA256 on SER replay data | `runtime.py:402` `_save_replay()` |
+| T1 Replay Attack | SER key derivation | `keys.py:138` `get_ser_key()` |
+| T2 Goal Hijacking | Intent anchor hash binding | `contract.py:124` `sign()` canonical payload |
+| T3 Contract Tampering | ECDSA signature verification | `contract.py:145` `verify_signature()` |
+| T4 DoS / Joule Exhaustion | Budget check per step | `runtime.py:213` `_run_sequence()` budget check |
+| T5 Key Compromise | File permission 0o600 | `keys.py:60` key file creation |
+| T6 Memory Exfiltration | AES-256-GCM encryption | `memory.py:83` `EncryptedMemoryBackend` |
+| T7 Tool Poisoning | Capability attestation check | `runtime.py:354` `_execute_step()` capability whitelist |
+| T8 Man-in-the-Middle | ANP envelope DID signatures | `anp.py:73` `create_anp_envelope()` |
+| T9 Unauthorized Settlement | API key requirement | `settlement.py:65` `HeliumBackend.__init__()` |
+| T10 DID Spoofing | DID:key crypto binding | `anp.py:24` `derive_did_from_key_manager()` |
+| All | Retry with backoff (network resilience) | `utils.py:13` `retry_with_backoff()` |
+
 ## Recommendations for Future Hardening
 
 1. **HSM/Vault integration** for key storage (addresses T5 residual risk)

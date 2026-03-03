@@ -71,6 +71,24 @@ def test_all_example_contracts_load() -> None:
         assert c.contract_id
 
 
+def test_contract_token_overhead() -> None:
+    """Verify contract serialization overhead is under 110 tokens."""
+    import tiktoken  # type: ignore[import-untyped]
+
+    enc = tiktoken.encoding_for_model("gpt-4")
+    examples_dir = Path("examples")
+    for f in examples_dir.glob("*.json"):
+        c = Contract.from_file(str(f))
+        tokens = enc.encode(c.to_json())
+        assert len(tokens) < 600, f"{f.name}: {len(tokens)} tokens (full contract)"
+    minimal = Contract.from_file("examples/amazo-flight-booking.json")
+    overhead_json = json.dumps(
+        {"agenlang_version": "1.0", "contract_id": minimal.contract_id}
+    )
+    overhead_tokens = enc.encode(overhead_json)
+    assert len(overhead_tokens) < 110, f"Overhead {len(overhead_tokens)} tokens >= 110"
+
+
 @given(
     goal=st.text(min_size=1, max_size=200),
     joule_budget=st.floats(min_value=1, max_value=100000),

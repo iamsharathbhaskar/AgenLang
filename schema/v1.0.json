@@ -59,7 +59,8 @@
             "required": ["action", "target"]
           }
         },
-        "on_error": { "$ref": "#/definitions/error_handler" }
+        "on_error": { "$ref": "#/definitions/error_handler" },
+        "max_concurrency": { "type": "integer", "minimum": 1, "default": 5 }
       },
       "required": ["type", "steps"]
     },

@@ -9,6 +9,8 @@ from typing import Any, Dict
 
 import structlog
 
+from .utils import retry_with_backoff
+
 log = structlog.get_logger()
 
 
@@ -43,6 +45,7 @@ def agenlang_tool_definition() -> Dict[str, Any]:
     }
 
 
+@retry_with_backoff(max_retries=2, base_delay=0.5, timeout=30.0)
 def handle_mcp_call(params: Dict[str, Any]) -> Dict[str, Any]:
     """Handle an MCP tool call for agenlang_execute.
 
@@ -153,6 +156,58 @@ def handle_jsonrpc_request(request: Dict[str, Any]) -> Dict[str, Any]:
         }
 
     return create_jsonrpc_response(req_id, result)
+
+
+def create_mcp_app() -> Any:
+    """Create a FastAPI app exposing MCP JSON-RPC and health endpoints.
+
+    Returns a FastAPI application with POST /jsonrpc, GET /health,
+    and GET /tools routes. Falls back gracefully if FastAPI is not installed.
+    """
+    try:
+        from fastapi import FastAPI, Request
+        from fastapi.responses import JSONResponse
+    except ImportError:
+        raise ImportError(
+            "FastAPI required for MCP HTTP server. "
+            "Install with: pip install fastapi uvicorn"
+        )
+
+    app = FastAPI(title="AgenLang MCP Server", version="1.0")
+
+    @app.get("/health")
+    async def health() -> Dict[str, str]:
+        return {"status": "ok"}
+
+    @app.get("/tools")
+    async def tools() -> Dict[str, Any]:
+        return {"tools": [agenlang_tool_definition()]}
+
+    @app.post("/jsonrpc")
+    async def jsonrpc(request: Request) -> JSONResponse:
+        body = await request.json()
+        response = handle_jsonrpc_request(body)
+        return JSONResponse(content=response)
+
+    return app
+
+
+def start_mcp_server(host: str = "0.0.0.0", port: int = 8716) -> None:
+    """Start the MCP HTTP server via uvicorn.
+
+    Args:
+        host: Bind address.
+        port: Listen port.
+    """
+    try:
+        import uvicorn  # type: ignore[import-untyped]
+    except ImportError:
+        raise ImportError(
+            "uvicorn required for MCP HTTP server. " "Install with: pip install uvicorn"
+        )
+
+    app = create_mcp_app()
+    uvicorn.run(app, host=host, port=port)
 
 
 def dispatch(

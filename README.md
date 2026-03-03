@@ -129,6 +129,49 @@ Use protocol prefixes in workflow steps for auto-dispatch:
 {"action": "subcontract", "target": "anp:https://peer.example.com/anp"}
 ```
 
+**Adapter Examples**
+
+```python
+from agenlang.contract import Contract
+from agenlang.keys import KeyManager
+
+contract = Contract.from_file("examples/amazo-flight-booking.json")
+km = KeyManager()
+
+# ACP — send contract via REST envelope
+from agenlang.acp import send_acp_message
+resp = send_acp_message("https://remote-agent.example.com/acp", contract)
+
+# MCP — handle a JSON-RPC tool call
+from agenlang.mcp import handle_mcp_call
+result = handle_mcp_call({"contract": contract.model_dump()})
+
+# FIPA — convert contract to ACL message
+from agenlang.fipa import contract_to_fipa_acl
+acl_msg = contract_to_fipa_acl(contract)
+
+# AG-UI — stream SER as Server-Sent Events
+from agenlang.agui import stream_ser_events
+for sse_line in stream_ser_events(ser_dict):
+    print(sse_line)
+
+# ANP — P2P contract exchange with DID signing
+from agenlang.anp import exchange_contract
+resp = exchange_contract("https://peer.example.com/anp", contract, km)
+
+# W3C DID — create DID Document from KeyManager
+from agenlang.w3c import create_did_document
+did_doc = create_did_document("did:web:example.com", km)
+
+# OASF — generate schema manifest
+from agenlang.oasf import generate_oasf_manifest
+manifest = generate_oasf_manifest()
+
+# Solana — settle via Solana devnet RPC
+from agenlang.solana import SolanaBackend
+receipt = SolanaBackend().settle("recipient-agent", 100.0, 0.001)
+```
+
 **Documentation**
 
 - [AGENTS.md](AGENTS.md) — Project context, Do Not rules, checkpoint card

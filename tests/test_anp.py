@@ -82,3 +82,58 @@ def test_dispatch_error_handling(tmp_path: Path) -> None:
         result = dispatch(contract, "subcontract", "peer.example.com", {})
     parsed = json.loads(result)
     assert parsed["status"] == "error"
+
+
+def test_gossip_node_broadcast(tmp_path: Path) -> None:
+    """GossipNode broadcasts to all peers."""
+    from agenlang.anp import GossipNode
+
+    km = KeyManager(key_path=tmp_path / "keys.pem")
+    km.generate()
+    contract = _load_contract()
+    node = GossipNode(km, ["https://peer1.example.com", "https://peer2.example.com"])
+
+    with patch("agenlang.anp.requests.post") as mock_post:
+        mock_post.return_value.raise_for_status = lambda: None
+        mock_post.return_value.json.return_value = {"status": "accepted"}
+        results = node.broadcast_contract(contract)
+
+    assert len(results) == 2
+    assert all(r["status"] == "ok" for r in results)
+
+
+def test_gossip_node_broadcast_with_error(tmp_path: Path) -> None:
+    """GossipNode handles peer errors gracefully."""
+    from agenlang.anp import GossipNode
+
+    km = KeyManager(key_path=tmp_path / "keys.pem")
+    km.generate()
+    contract = _load_contract()
+    node = GossipNode(km, ["https://bad-peer.example.com"])
+
+    with patch("agenlang.anp.requests.post", side_effect=Exception("down")):
+        results = node.broadcast_contract(contract)
+
+    assert len(results) == 1
+    assert results[0]["status"] == "error"
+
+
+def test_simulate_gossip(tmp_path: Path) -> None:
+    """simulate_gossip runs multiple rounds and discovers new peers."""
+    from agenlang.anp import GossipNode
+
+    km = KeyManager(key_path=tmp_path / "keys.pem")
+    km.generate()
+    contract = _load_contract()
+    node = GossipNode(km, ["https://peer1.example.com"])
+
+    with patch("agenlang.anp.requests.post") as mock_post:
+        mock_post.return_value.raise_for_status = lambda: None
+        mock_post.return_value.json.return_value = {
+            "status": "accepted",
+            "peers": ["https://new-peer.example.com"],
+        }
+        results = node.simulate_gossip(contract, rounds=2)
+
+    assert len(results) >= 2
+    assert "https://new-peer.example.com" in node.peers

@@ -2,6 +2,8 @@
 
 import json
 import random
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
@@ -15,6 +17,7 @@ from .contract import Contract
 from .keys import KeyManager
 from .memory import EncryptedMemoryBackend
 from .tools import TOOLS
+from .utils import retry_with_backoff
 
 log = structlog.get_logger()
 
@@ -36,6 +39,7 @@ def _parse_protocol_target(raw_target: str) -> Tuple[Optional[str], str]:
     return None, raw_target
 
 
+@retry_with_backoff(max_retries=2, base_delay=0.5, timeout=30.0)
 def _dispatch_protocol(
     protocol: str,
     target: str,
@@ -84,7 +88,8 @@ class Runtime:
         self._max_recursion = 10
         self.replay_data: list[dict[str, Any]] = []
         self._decision_points: list[dict[str, Any]] = []
-        self._step_outputs: dict[int, str] = {}  # idx -> output for conditional logic
+        self._step_outputs: dict[int, str] = {}
+        self._lock = threading.Lock()
         # Encrypted memory default (production)
         self.memory: Any = EncryptedMemoryBackend(
             self.execution_id,
@@ -214,21 +219,38 @@ class Runtime:
             self.steps_executed += 1
 
     def _run_parallel(self, steps: list) -> None:
-        """Execute all steps as independent branches with decision tracking."""
-        log.info("workflow_parallel", branches=len(steps))
-        for idx, step in enumerate(steps):
-            if self._joules_used >= self.contract.constraints.joule_budget:
-                raise ValueError("Joule budget exhausted")
-            self._decision_points.append(
-                {
-                    "type": "parallel_branch",
-                    "location": f"branch_{idx}",
-                    "rationale": f"independent branch {idx}/{len(steps)}",
-                    "chosen": True,
-                }
-            )
-            resolved_args, _skip = self._resolve_step_args(step, idx)
-            self._execute_step_with_error_handler(step, resolved_args)
+        """Execute all steps concurrently via ThreadPoolExecutor."""
+        max_workers = self.contract.workflow.max_concurrency
+        log.info(
+            "workflow_parallel",
+            branches=len(steps),
+            max_concurrency=max_workers,
+        )
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = []
+            for idx, step in enumerate(steps):
+                with self._lock:
+                    if self._joules_used >= self.contract.constraints.joule_budget:
+                        raise ValueError("Joule budget exhausted")
+                    self._decision_points.append(
+                        {
+                            "type": "parallel_branch",
+                            "location": f"branch_{idx}",
+                            "rationale": f"independent branch {idx}/{len(steps)}",
+                            "chosen": True,
+                        }
+                    )
+                futures.append(
+                    executor.submit(self._execute_parallel_branch, idx, step)
+                )
+            for future in futures:
+                future.result()
+
+    def _execute_parallel_branch(self, idx: int, step: Any) -> None:
+        """Execute a single parallel branch with thread-safe mutations."""
+        resolved_args, _skip = self._resolve_step_args(step, idx)
+        self._execute_step_with_error_handler(step, resolved_args)
+        with self._lock:
             self.steps_executed += 1
 
     def _run_probabilistic(self, steps: list) -> None:

@@ -97,3 +97,59 @@ def test_create_jsonrpc_response() -> None:
     assert resp["jsonrpc"] == "2.0"
     assert resp["id"] == 42
     assert resp["result"]["ok"] is True
+
+
+def test_start_mcp_server_calls_uvicorn() -> None:
+    """start_mcp_server creates app and calls uvicorn.run."""
+    from unittest.mock import MagicMock, patch
+
+    mock_uvicorn = MagicMock()
+    with patch.dict("sys.modules", {"uvicorn": mock_uvicorn}):
+        from agenlang.mcp import start_mcp_server
+
+        start_mcp_server(host="127.0.0.1", port=9999)
+    mock_uvicorn.run.assert_called_once()
+    call_kwargs = mock_uvicorn.run.call_args
+    assert call_kwargs.kwargs["host"] == "127.0.0.1"
+    assert call_kwargs.kwargs["port"] == 9999
+
+
+def test_mcp_fastapi_app_routes() -> None:
+    """FastAPI MCP app exposes /health, /tools, /jsonrpc routes."""
+    from agenlang.mcp import create_mcp_app
+
+    try:
+        from httpx import ASGITransport, AsyncClient
+    except ImportError:
+        import pytest
+
+        pytest.skip("httpx not available")
+        return
+
+    import asyncio
+
+    app = create_mcp_app()
+
+    async def _test() -> None:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            health = await client.get("/health")
+            assert health.status_code == 200
+            assert health.json()["status"] == "ok"
+
+            tools = await client.get("/tools")
+            assert tools.status_code == 200
+            assert len(tools.json()["tools"]) == 1
+
+            rpc = await client.post(
+                "/jsonrpc",
+                json={
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "initialize",
+                },
+            )
+            assert rpc.status_code == 200
+            assert "result" in rpc.json()
+
+    asyncio.run(_test())
