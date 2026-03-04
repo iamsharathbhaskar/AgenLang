@@ -1,4 +1,4 @@
-# AgenLang Specification v0.4.0
+# AgenLang Specification v0.4.1
 
 ## 1. Introduction
 
@@ -16,7 +16,7 @@ A valid AgenLang contract MUST conform to the v1.0 schema. All fields below are 
 
 - **agenlang_version** (MUST): String literal `"1.0"`.
 - **contract_id** (MUST): URN of the form `urn:agenlang:exec:` followed by exactly 32 lowercase hexadecimal characters. Uniquely identifies the contract and prevents replay.
-- **issuer** (MUST): Object containing `agent_id`, `pubkey`, and optionally `proof` (set after signing).
+- **issuer** (MUST): Object containing `agent_id`, `pubkey`, and optionally `proof` (set after signing). When signed (`proof` present), `agent_id` MUST be a DID:key (format `did:key:z&lt;base58btc&gt;`) derived from the signing key and MUST match the public key in `pubkey`.
 - **goal** (MUST): Human-readable description of the delegation intent.
 - **intent_anchor** (MUST): Object with `hash` (MUST) and optional `user_signature`. Binds user intent; the hash SHOULD cover the goal and critical constraints.
 - **constraints** (MUST): Object with `joule_budget` (MUST, non-negative), optional `max_usd`, `pii_level` (enum: none, minimal, gdpr_standard, hipaa), and optional `ethical` array.
@@ -51,17 +51,24 @@ Each step MUST have:
 - The signature MUST be Base64-encoded and stored in `issuer.proof`.
 - The public key used for verification MUST be stored in `issuer.pubkey` as PEM-encoded SubjectPublicKeyInfo.
 
-### 3.2 KeyManager Rules
+### 3.2 Issuer Identity (DID:key)
+
+- When signing, `issuer.agent_id` MUST be set to the DID:key derived from the KeyManager's public key via `derive_did_key()`.
+- The DID:key format MUST follow the W3C did:key spec: `did:key:z` + base58btc(multicodec(0x1200) + compressed P-256 public key).
+- Verification MUST confirm that `issuer.agent_id` matches the DID derived from `issuer.pubkey`; mismatch MUST cause verification to fail.
+
+### 3.3 KeyManager Rules
 
 - KeyManager MUST persist the private key to a configurable path (default `~/.agenlang/keys.pem`). The `AGENLANG_KEY_DIR` environment variable MAY override the base directory.
 - Key files MUST be created with permissions `0o600`.
-- KeyManager MUST provide: `sign(data) -> signature`, `verify(data, signature, public_key_pem) -> bool`, `get_public_key_pem() -> bytes`, and a SER key for HMAC (derived or stored separately).
+- KeyManager MUST provide: `derive_did_key() -> str`, `sign(data) -> signature`, `verify(data, signature, public_key_pem) -> bool`, `get_public_key_pem() -> bytes`, and a SER key for HMAC (derived or stored separately).
 - Key rotation is supported by calling `generate()`; existing signed contracts remain verifiable with their original `issuer.pubkey`.
 
-### 3.3 Verification
+### 3.4 Verification
 
 - `verify_signature()` MUST return false if `issuer.proof` is missing or invalid.
 - Verification MUST use the same canonical payload construction as signing.
+- `verify_signature()` MUST return false if `issuer.agent_id` is not a valid DID:key or does not match the DID derived from `issuer.pubkey`.
 - Issuer cert chain validation is out of scope for v0.4.0; production implementations SHOULD validate that `issuer.pubkey` is from a trusted chain.
 
 ---
@@ -128,6 +135,14 @@ The payload signed is: `{entry_type}|{amount_joules}|{recipient}|{timestamp}`. T
 
 - The sum of debits SHOULD equal `resource_usage.joules_used` in the SER.
 - Balance verification is advisory; the authoritative record is the signed ledger itself.
+
+### 5.6 Canonical Joule Formula
+
+The canonical definition for Joule measurement is:
+
+**1 Joule = (input_tokens × 0.0001) + (output_tokens × 0.0003) + (wall_clock_seconds × 0.01)**
+
+Implementations MUST use this formula when token counts and wall-clock time are available. When token counts are unavailable, implementations MAY use a fallback (e.g. tool-registry joule_cost) but SHOULD document the fallback.
 
 ---
 

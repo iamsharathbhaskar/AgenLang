@@ -24,7 +24,10 @@ def test_runtime_execute_e2e(tmp_path: Path) -> None:
     assert result["status"] == "success"
     assert result["steps_completed"] == 2
     assert ser["execution_id"] == contract.contract_id
-    assert ser["resource_usage"]["joules_used"] == 150 + 80
+    assert ser["resource_usage"]["joules_used"] > 0
+    assert sum(
+        e["amount_joules"] for e in ser["ledger_entries"]
+    ) == ser["resource_usage"]["joules_used"]
     assert ser["resource_usage"]["efficiency_score"] >= 0.0
     assert ser["reputation_score"] >= 0.0
     assert ser["settlement_receipt"]["joule_recipient"]
@@ -35,7 +38,7 @@ def test_runtime_joule_budget_exhausted(tmp_path: Path) -> None:
     km = KeyManager(key_path=tmp_path / "keys.pem")
     km.generate()
     contract = Contract.from_file(str(EXAMPLES_DIR / "amazo-flight-booking.json"))
-    contract.constraints.joule_budget = 10
+    contract.constraints.joule_budget = 1e-6
     runtime = Runtime(contract, key_manager=km)
     with pytest.raises(ValueError, match="Joule budget exhausted"):
         runtime.execute()

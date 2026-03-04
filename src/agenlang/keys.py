@@ -15,6 +15,44 @@ from cryptography.hazmat.primitives.asymmetric import ec
 
 log = structlog.get_logger()
 
+# Base58btc alphabet (no 0, O, I, l)
+_BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+
+
+def _base58_encode(data: bytes) -> str:
+    """Encode bytes to base58btc (used in did:key)."""
+    num = int.from_bytes(data, "big")
+    if num == 0:
+        return _BASE58_ALPHABET[0]
+    result = []
+    while num > 0:
+        num, rem = divmod(num, 58)
+        result.append(_BASE58_ALPHABET[rem])
+    return "".join(reversed(result))
+
+
+def _derive_did_from_ec_pubkey(pub: ec.EllipticCurvePublicKey) -> str:
+    """Derive did:key from ECDSA P-256 public key (compressed, per W3C spec)."""
+    assert isinstance(pub, ec.EllipticCurvePublicKey)
+    numbers = pub.public_numbers()
+    x_bytes = numbers.x.to_bytes(32, "big")
+    y_even = (numbers.y % 2) == 0
+    prefix = b"\x02" if y_even else b"\x03"
+    raw_key = prefix + x_bytes
+    multicodec = bytes([0x12, 0x00])
+    payload = multicodec + raw_key
+    encoded = _base58_encode(payload)
+    return f"did:key:z{encoded}"
+
+
+def derive_did_from_pubkey(pubkey_pem: bytes) -> str:
+    """Derive did:key from PEM-encoded public key. Used for verification."""
+    loaded = serialization.load_pem_public_key(
+        pubkey_pem, backend=default_backend()
+    )
+    assert isinstance(loaded, ec.EllipticCurvePublicKey)
+    return _derive_did_from_ec_pubkey(loaded)
+
 
 class KeyManager:
     """Manages ECDSA keys for signing and verification.
@@ -86,6 +124,15 @@ class KeyManager:
             encoding=serialization.Encoding.PEM,
             format=serialization.PublicFormat.SubjectPublicKeyInfo,
         )
+
+    def derive_did_key(self) -> str:
+        """Derive did:key identifier from the public key (P-256, compressed).
+
+        Returns:
+            DID string in format did:key:z&lt;base58btc&gt; per W3C did:key spec.
+        """
+        pub = self.get_or_create().public_key()
+        return _derive_did_from_ec_pubkey(pub)
 
     def sign(self, data: bytes) -> bytes:
         """Sign data with ECDSA-SHA256.

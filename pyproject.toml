@@ -1,6 +1,6 @@
 [project]
 name = "agenlang"
-version = "0.4.0"
+version = "0.4.1"
 description = "AgenLang — standardized contract substrate for secure inter-agent communication"
 readme = "README.md"
 license = {text = "Apache-2.0"}

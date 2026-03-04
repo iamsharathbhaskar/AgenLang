@@ -17,6 +17,7 @@ Mapped to NIST SP 800-53 Rev. 5 control families.
 | T8 | **Man-in-the-Middle** — Interception of A2A messages during transit | SC-8 (Transmission Confidentiality), SC-23 (Session Authenticity) | High | Medium | HTTPS transport for A2A adapter; A2A JSON-RPC has contract signature | Low — transport encryption + payload signing provides defense-in-depth |
 | T9 | **Unauthorized Settlement** — Triggering settlement without valid execution | AU-12 (Audit Record Generation), AC-3 (Access Enforcement) | High | Low | Signed ledger entries tied to SER execution_id; per-step ECDSA signatures; SER records full audit trail | Low — requires valid KeyManager and execution context |
 | T10 | **API Key Leakage** — Embedded API keys in contract JSON exposing secrets | SC-28 (Protection of Information at Rest), IA-5 (Authenticator Management) | High | Medium | Regex-based leak prevention in `Contract.from_dict()` and `Contract.model_validate()`; rejects contracts with key-like patterns | Low — validation runs before any execution |
+| T11 | **Issuer Identity Spoofing** — Attacker uses a valid signature but a forged `agent_id` to impersonate another agent | IA-8 (Identification and Authentication), SC-13 (Cryptographic Protection) | Critical | Medium | `issuer.agent_id` MUST be a DID:key derived from `issuer.pubkey` via `derive_did_key()`; `verify_signature()` rejects DID/pubkey mismatch; `from_dict()` rejects signed contracts with non-DID agent_id | Low — spoofing requires the victim's private key to derive matching DID |
 
 ## Trust Boundaries
 
@@ -54,6 +55,7 @@ Mapped to NIST SP 800-53 Rev. 5 control families.
 | T8 Man-in-the-Middle | A2A contract signature | `a2a.py` `contract_to_a2a_payload()` |
 | T9 Unauthorized Settlement | Signed ledger entries | `settlement.py` `SignedLedger.append_entry()` |
 | T10 API Key Leakage | Regex leak prevention | `contract.py` `_check_for_leaked_keys()` |
+| T11 Issuer Identity Spoofing | DID:key identity binding and verification | `contract.py` `verify_signature()`, `keys.py` `derive_did_key()` |
 | All | Retry with backoff (network resilience) | `utils.py` `retry_with_backoff()` |
 
 ## Recommendations for Future Hardening

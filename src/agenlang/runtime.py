@@ -1,6 +1,7 @@
 """AgenLang Runtime - executes contracts with safety, audit, and settlement."""
 
 import json
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
@@ -18,6 +19,26 @@ from .tools import TOOLS
 from .utils import retry_with_backoff
 
 log = structlog.get_logger()
+
+# Canonical Joule formula per SPEC.md 5.6
+# 1 Joule = (input_tokens × 0.0001) + (output_tokens × 0.0003) + (wall_clock_seconds × 0.01)
+def _measure_joules(
+    input_tokens: float,
+    output_tokens: float,
+    wall_clock_seconds: float,
+) -> float:
+    """Compute Joules per canonical formula. See SPEC.md Ledger section."""
+    return (
+        input_tokens * 0.0001
+        + output_tokens * 0.0003
+        + wall_clock_seconds * 0.01
+    )
+
+
+def _estimate_tokens(text: str) -> float:
+    """Rough token estimate: ~4 chars per token."""
+    return max(1.0, len(text) / 4.0)
+
 
 PROTOCOL_ADAPTERS: Dict[str, str] = {
     "a2a": "agenlang.a2a",
@@ -268,10 +289,14 @@ class Runtime:
             protocol, target = _parse_protocol_target(raw_target)
 
             if protocol:
+                t0 = time.monotonic()
+                input_est = _estimate_tokens(json.dumps(args))
                 output = _dispatch_protocol(
                     protocol, target, action, args, self.contract
                 )
-                joule_cost = 100.0
+                wall = time.monotonic() - t0
+                output_est = _estimate_tokens(output)
+                joule_cost = _measure_joules(input_est, output_est, wall)
                 self._joules_used += joule_cost
                 step_idx = len(self.replay_data)
                 self.replay_data.append({"step": raw_target, "output": output})
@@ -299,8 +324,12 @@ class Runtime:
                         c.capability for c in self.contract.capability_attestations
                     ]
                     if all(cap in attested for cap in required_caps):
+                        t0 = time.monotonic()
+                        input_est = _estimate_tokens(json.dumps(args))
                         output = tool["function"](args)
-                        joule_cost = tool.get("joule_cost", 100.0)
+                        wall = time.monotonic() - t0
+                        output_est = _estimate_tokens(output)
+                        joule_cost = _measure_joules(input_est, output_est, wall)
                         self._joules_used += joule_cost
                         step_idx = len(self.replay_data)
                         self.replay_data.append({"step": target, "output": output})

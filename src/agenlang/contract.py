@@ -25,8 +25,12 @@ from .models import (
     Workflow,
 )
 
+from .keys import derive_did_from_pubkey
+
 if TYPE_CHECKING:
     from .keys import KeyManager
+
+_DID_KEY_PATTERN = re.compile(r"^did:key:z[1-9A-HJ-NP-Za-km-z]+$")
 
 _KEY_PATTERNS = [
     re.compile(r"sk-[a-zA-Z0-9]{20,}"),
@@ -128,6 +132,13 @@ class Contract(BaseModel):
             validate(instance=data, schema=schema)
         except ValidationError as e:
             raise ValueError(f"Invalid AgenLang contract: {e.message}") from e
+        issuer = data.get("issuer", {})
+        if isinstance(issuer, dict) and issuer.get("proof"):
+            agent_id = issuer.get("agent_id", "")
+            if not _DID_KEY_PATTERN.match(agent_id):
+                raise ValueError(
+                    "Signed contract requires issuer.agent_id as did:key format"
+                )
         return cls.model_validate(data)
 
     def to_json(self) -> str:
@@ -150,36 +161,31 @@ class Contract(BaseModel):
         )
 
     def sign(self, key_manager: "KeyManager") -> None:
-        """Sign contract with KeyManager. Sets issuer.pubkey and issuer.proof.
+        """Sign contract with KeyManager. Sets issuer.agent_id (DID:key), pubkey, proof.
 
         Args:
             key_manager: KeyManager instance with private key.
         """
+        did = key_manager.derive_did_key()
         pubkey_pem = key_manager.get_public_key_pem().decode("utf-8")
-        # Set pubkey first so payload matches what we'll verify
-        self.issuer = Issuer(
-            agent_id=self.issuer.agent_id,
-            pubkey=pubkey_pem,
-            proof=None,
-        )
+        self.issuer = Issuer(agent_id=did, pubkey=pubkey_pem, proof=None)
         payload = self._canonical_payload()
         signature = key_manager.sign(payload)
         self.issuer = Issuer(
-            agent_id=self.issuer.agent_id,
+            agent_id=did,
             pubkey=pubkey_pem,
             proof=base64.b64encode(signature).decode("ascii"),
         )
 
     def verify_signature(self) -> bool:
-        """Verify issuer signature. Checks ECDSA signature in issuer.proof.
+        """Verify issuer signature and DID:key identity binding.
 
-        Issuer cert chain check is stubbed; production should validate
-        that issuer.pubkey is from a trusted chain.
-
-        Returns:
-            True if signature valid, False if missing or invalid.
+        Requires issuer.agent_id to be a DID:key that matches issuer.pubkey.
+        Returns True only if both signature and identity are valid.
         """
         if not self.issuer.proof:
+            return False
+        if not _DID_KEY_PATTERN.match(self.issuer.agent_id):
             return False
         try:
             signature = base64.b64decode(self.issuer.proof)
@@ -189,6 +195,10 @@ class Contract(BaseModel):
         if "\\n" in pubkey_str:
             pubkey_str = pubkey_str.replace("\\n", "\n")
         pubkey_pem = pubkey_str.encode("utf-8")
+
+        derived_did = derive_did_from_pubkey(pubkey_pem)
+        if self.issuer.agent_id != derived_did:
+            return False
 
         from cryptography.exceptions import InvalidSignature
         from cryptography.hazmat.backends import default_backend

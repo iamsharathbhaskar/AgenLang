@@ -6,12 +6,13 @@ AgenLang is a lightweight, model-agnostic standard that lets personal agents (Op
 
 ## Kernel Architecture
 
-AgenLang v0.4.0 is a minimal viable kernel focused on correctness and security:
+AgenLang v0.4.1 is a minimal viable kernel focused on correctness and security:
 
 - **Contract** — JSON contract with ECDSA signing, intent anchoring, capability attestations
 - **Runtime** — Deterministic sequential workflow execution with Joule metering
 - **SER** — HMAC-protected Structured Execution Record with replay verification
 - **A2A** — Transport wrapper for the Linux Foundation A2A protocol (JSON-RPC + SSE)
+- **Joule Formula** — Canonical metering: `(input_tokens × 0.0001) + (output_tokens × 0.0003) + (wall_clock_seconds × 0.01)` (see [SPEC.md](SPEC.md) §5.6)
 - **Signed Ledger** — Double-entry settlement ledger with per-step ECDSA signatures
 - **Encrypted Memory** — AES-256-GCM memory backend with GDPR-ready handoff and purge
 - **Leak Prevention** — Contracts with embedded API keys are rejected at validation time
@@ -90,3 +91,4 @@ Token overhead: <80 tokens when compressed.
 - [AGENTS.md](AGENTS.md) — Project context, Do Not rules
 - [skills.md](skills.md) — Register AgenLang as a tool in LangChain/CrewAI/OpenClaw
 - [threat_model.md](threat_model.md) — NIST SP 800-53 threat matrix
+- [GOVERNANCE.md](GOVERNANCE.md) — Specification change process and versioning policy

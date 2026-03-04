@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.4.1] — 2026-03-03
+
+### Added
+- DID:key issuer identity: `derive_did_key()` in `keys.py`; `contract.py` enforces DID:key as `issuer.agent_id` on signing and verification
+- Canonical Joule formula in SPEC.md 5.6: `1 Joule = (input_tokens × 0.0001) + (output_tokens × 0.0003) + (wall_clock_seconds × 0.01)`
+- `_measure_joules()` in `runtime.py` implementing the canonical formula
+- E2E A2A test (`tests/test_e2e_a2a.py`): sign → A2A payload → execute → verify SER + ledger balance
+- `GOVERNANCE.md`: proposal + 2-week comment period for SPEC.md changes; backward compatibility required for minor versions
+- T11 (Issuer Identity Spoofing) in `threat_model.md` threat matrix
+
+### Changed
+- SPEC.md updated with Section 3.2 (Issuer Identity DID:key) and Section 5.6 (Canonical Joule Formula)
+- Runtime Joule metering uses canonical formula instead of tool-registry `joule_cost`
+
 ## [0.4.0] — 2026-03-03
 
 ### Removed
