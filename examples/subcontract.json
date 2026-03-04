@@ -2,6 +2,7 @@
   "agenlang_version": "1.0",
   "contract_id": "urn:agenlang:exec:b2c3d4e5f6789012345678abcdef0123",
   "issuer": {"agent_id": "orchestrator-agent", "pubkey": "ecdsa-p256:base64..."},
+  "receiver": {"agent_id": "validation-agent"},
   "goal": "Delegate data validation to specialist agent, then aggregate results",
   "intent_anchor": {"hash": "sha256:user-intent-subcontract-validation"},
   "constraints": {"joule_budget": 8000, "pii_level": "gdpr_standard"},

@@ -2,6 +2,7 @@
   "agenlang_version": "1.0",
   "contract_id": "urn:agenlang:exec:d4e5f6789012345678abcdef01234567",
   "issuer": {"agent_id": "payment-orchestrator", "pubkey": "ecdsa-p256:base64..."},
+  "receiver": {"agent_id": "worker-agent-xyz"},
   "goal": "Execute paid task with JouleWork settlement to recipient",
   "intent_anchor": {"hash": "sha256:user-intent-paid-task"},
   "constraints": {"joule_budget": 10000, "max_usd": 2.00},

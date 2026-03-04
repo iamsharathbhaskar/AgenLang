@@ -17,6 +17,22 @@ class Issuer(BaseModel):
     proof: Optional[str] = None
 
 
+class Receiver(BaseModel):
+    """Receiver agent identity (symmetric to Issuer)."""
+
+    agent_id: str
+    pubkey: Optional[str] = None
+
+
+class ReceiverReceipt(BaseModel):
+    """Signed receipt proving the receiver executed the contract."""
+
+    agent_id: str
+    pubkey: str
+    signature: str
+    timestamp: str
+
+
 class IntentAnchor(BaseModel):
     """Hash anchoring user intent."""
 
@@ -149,6 +165,7 @@ class ContractModel(BaseModel):
     agenlang_version: str = "1.0"
     contract_id: str
     issuer: Issuer
+    receiver: Receiver
     goal: str
     intent_anchor: IntentAnchor
     constraints: Constraints

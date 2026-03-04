@@ -102,6 +102,7 @@ def test_contract_fuzz_valid(goal: str, joule_budget: float) -> None:
         "agenlang_version": "1.0",
         "contract_id": contract_id,
         "issuer": {"agent_id": "test", "pubkey": "pk"},
+        "receiver": {"agent_id": "receiver-test"},
         "goal": goal,
         "intent_anchor": {"hash": "sha256:test"},
         "constraints": {"joule_budget": joule_budget},
@@ -128,6 +129,7 @@ def _make_valid_data(**overrides: object) -> dict:
         "agenlang_version": "1.0",
         "contract_id": f"urn:agenlang:exec:{secrets.token_hex(16)}",
         "issuer": {"agent_id": "test", "pubkey": "pk"},
+        "receiver": {"agent_id": "receiver-test"},
         "goal": "test goal",
         "intent_anchor": {"hash": "sha256:test"},
         "constraints": {"joule_budget": 1000},
@@ -178,3 +180,67 @@ def test_contract_allows_normal_strings() -> None:
     data = _make_valid_data(goal="Book a flight from LAX to SFO under $150")
     c = Contract.from_dict(data)
     assert c.goal == "Book a flight from LAX to SFO under $150"
+
+
+def test_contract_missing_receiver_raises() -> None:
+    """Contract without receiver fails schema validation."""
+    import secrets
+
+    data = {
+        "agenlang_version": "1.0",
+        "contract_id": f"urn:agenlang:exec:{secrets.token_hex(16)}",
+        "issuer": {"agent_id": "test", "pubkey": "pk"},
+        "goal": "test",
+        "intent_anchor": {"hash": "sha256:test"},
+        "constraints": {"joule_budget": 1000},
+        "workflow": {
+            "type": "sequence",
+            "steps": [{"action": "tool", "target": "web_search", "args": {}}],
+        },
+        "memory_contract": {"handoff_keys": [], "ttl": "1h"},
+        "settlement": {"joule_recipient": "r", "rate": 1.0},
+        "capability_attestations": [{"capability": "net:read", "proof": "p"}],
+    }
+    with pytest.raises(ValueError, match="Invalid AgenLang contract"):
+        Contract.from_dict(data)
+
+
+def test_contract_receiver_roundtrip() -> None:
+    """Receiver field survives JSON roundtrip."""
+    c = Contract.from_file("examples/amazo-flight-booking.json")
+    assert c.receiver.agent_id == "zhc-travel-agent"
+    data = json.loads(c.to_json())
+    assert data["receiver"]["agent_id"] == "zhc-travel-agent"
+
+
+def test_contract_verify_receiver_key_match(tmp_path: Path) -> None:
+    """verify_receiver_key returns True when pubkey matches KeyManager."""
+    from agenlang.keys import KeyManager
+
+    km = KeyManager(key_path=tmp_path / "keys.pem")
+    km.generate()
+    c = Contract.from_file("examples/amazo-flight-booking.json")
+    c.receiver.pubkey = km.get_public_key_pem().decode("utf-8")
+    assert c.verify_receiver_key(km) is True
+
+
+def test_contract_verify_receiver_key_mismatch(tmp_path: Path) -> None:
+    """verify_receiver_key returns False when pubkey doesn't match."""
+    from agenlang.keys import KeyManager
+
+    km = KeyManager(key_path=tmp_path / "keys.pem")
+    km.generate()
+    c = Contract.from_file("examples/amazo-flight-booking.json")
+    c.receiver.pubkey = "wrong-pubkey-data"
+    assert c.verify_receiver_key(km) is False
+
+
+def test_contract_verify_receiver_key_absent(tmp_path: Path) -> None:
+    """verify_receiver_key returns True when receiver.pubkey is absent."""
+    from agenlang.keys import KeyManager
+
+    km = KeyManager(key_path=tmp_path / "keys.pem")
+    km.generate()
+    c = Contract.from_file("examples/amazo-flight-booking.json")
+    assert c.receiver.pubkey is None
+    assert c.verify_receiver_key(km) is True

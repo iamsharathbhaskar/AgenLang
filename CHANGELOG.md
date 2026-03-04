@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.4.2] — 2026-03-04
+
+### Added
+- Mandatory `receiver` field on contracts (agent_id + optional pubkey) for symmetric identity
+- `verify_receiver_key()` in `contract.py` for pre-execution pubkey validation
+- Signed `receiver_receipt` in SER: hash(SER + agent_id + timestamp) signed by executing KeyManager
+- SPEC.md Section 4.4 "Receiver Identity" with MUST rules for receipt signing and validation
+- Tests for missing receiver, pubkey match/mismatch, and receipt signature verification
+
+### Changed
+- `receiver` is now a required root field in `schema/v1.0.json` and `models.py`
+- All example contracts updated with `receiver` field
+- Runtime rejects contracts without a receiver
+
 ## [0.4.1] — 2026-03-03
 
 ### Added

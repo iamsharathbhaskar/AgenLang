@@ -49,3 +49,7 @@ def test_e2e_sign_a2a_execute_verify(tmp_path: Path) -> None:
     assert ser["resource_usage"]["efficiency_score"] >= 0.0
     assert "timestamps" in ser
     assert "replay_ref" in ser
+
+    assert "receiver_receipt" in ser
+    assert ser["receiver_receipt"]["agent_id"] == "zhc-travel-agent"
+    assert ser["receiver_receipt"]["signature"]

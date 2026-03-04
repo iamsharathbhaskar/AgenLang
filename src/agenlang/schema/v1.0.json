@@ -22,6 +22,14 @@
       },
       "required": ["agent_id", "pubkey"]
     },
+    "receiver": {
+      "type": "object",
+      "properties": {
+        "agent_id": { "type": "string" },
+        "pubkey": { "type": "string" }
+      },
+      "required": ["agent_id"]
+    },
     "goal": { "type": "string" },
     "intent_anchor": {
       "type": "object",
@@ -144,7 +152,7 @@
       "required": ["execution_id", "timestamps", "resource_usage"]
     }
   },
-  "required": ["agenlang_version", "contract_id", "issuer", "goal", "intent_anchor", "constraints", "workflow", "memory_contract", "settlement", "capability_attestations"],
+  "required": ["agenlang_version", "contract_id", "issuer", "receiver", "goal", "intent_anchor", "constraints", "workflow", "memory_contract", "settlement", "capability_attestations"],
   "definitions": {
     "error_handler": {
       "type": "object",

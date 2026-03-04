@@ -20,6 +20,7 @@ from .models import (
     IntentAnchor,
     Issuer,
     MemoryContract,
+    Receiver,
     SerConfig,
     Settlement,
     Workflow,
@@ -80,6 +81,7 @@ class Contract(BaseModel):
     agenlang_version: str = "1.0"
     contract_id: str
     issuer: Issuer
+    receiver: Receiver
     goal: str
     intent_anchor: IntentAnchor
     constraints: Constraints
@@ -216,3 +218,14 @@ class Contract(BaseModel):
             return True
         except (InvalidSignature, Exception):
             return False
+
+    def verify_receiver_key(self, key_manager: "KeyManager") -> bool:
+        """Check receiver.pubkey matches executing KeyManager's public key.
+
+        Returns True if receiver.pubkey is absent (any executor accepted)
+        or if it matches the KeyManager's PEM public key.
+        """
+        if not self.receiver.pubkey:
+            return True
+        km_pubkey = key_manager.get_public_key_pem().decode("utf-8")
+        return self.receiver.pubkey.strip() == km_pubkey.strip()

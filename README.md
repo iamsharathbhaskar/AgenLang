@@ -6,10 +6,10 @@ AgenLang is a lightweight, model-agnostic standard that lets personal agents (Op
 
 ## Kernel Architecture
 
-AgenLang v0.4.1 is a minimal viable kernel focused on correctness and security:
+AgenLang v0.4.2 is a minimal viable kernel focused on correctness and security:
 
-- **Contract** — JSON contract with ECDSA signing, intent anchoring, capability attestations
-- **Runtime** — Deterministic sequential workflow execution with Joule metering
+- **Contract** — JSON contract with ECDSA signing, issuer/receiver identity, intent anchoring, capability attestations
+- **Runtime** — Deterministic sequential workflow execution with Joule metering and signed receiver receipts
 - **SER** — HMAC-protected Structured Execution Record with replay verification
 - **A2A** — Transport wrapper for the Linux Foundation A2A protocol (JSON-RPC + SSE)
 - **Joule Formula** — Canonical metering: `(input_tokens × 0.0001) + (output_tokens × 0.0003) + (wall_clock_seconds × 0.01)` (see [SPEC.md](SPEC.md) §5.6)
@@ -61,6 +61,7 @@ assert contract.verify_signature()
 runtime = Runtime(contract, key_manager=km)
 result, ser = runtime.execute()
 print(result["output"])
+print(ser["receiver_receipt"])  # signed receipt from executor
 print(runtime.to_ser_json(ser))
 ```
 

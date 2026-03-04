@@ -1,4 +1,4 @@
-# AgenLang Specification v0.4.1
+# AgenLang Specification v0.4.2
 
 ## 1. Introduction
 
@@ -16,7 +16,8 @@ A valid AgenLang contract MUST conform to the v1.0 schema. All fields below are 
 
 - **agenlang_version** (MUST): String literal `"1.0"`.
 - **contract_id** (MUST): URN of the form `urn:agenlang:exec:` followed by exactly 32 lowercase hexadecimal characters. Uniquely identifies the contract and prevents replay.
-- **issuer** (MUST): Object containing `agent_id`, `pubkey`, and optionally `proof` (set after signing). When signed (`proof` present), `agent_id` MUST be a DID:key (format `did:key:z&lt;base58btc&gt;`) derived from the signing key and MUST match the public key in `pubkey`.
+- **issuer** (MUST): Object containing `agent_id`, `pubkey`, and optionally `proof` (set after signing). When signed (`proof` present), `agent_id` MUST be a DID:key (format `did:key:z<base58btc>`) derived from the signing key and MUST match the public key in `pubkey`.
+- **receiver** (MUST): Object containing `agent_id` (DID:key or URN identifying the intended executor) and optionally `pubkey` (PEM-encoded public key for pre-execution identity verification). See Section 4.4 for receipt signing rules.
 - **goal** (MUST): Human-readable description of the delegation intent.
 - **intent_anchor** (MUST): Object with `hash` (MUST) and optional `user_signature`. Binds user intent; the hash SHOULD cover the goal and critical constraints.
 - **constraints** (MUST): Object with `joule_budget` (MUST, non-negative), optional `max_usd`, `pii_level` (enum: none, minimal, gdpr_standard, hipaa), and optional `ethical` array.
@@ -100,6 +101,19 @@ The SER is produced after contract execution and MUST contain the following stru
 - Content: JSON-encoded array of step results.
 - Append: Raw HMAC-SHA256 digest (binary) appended to the JSON bytes.
 - Verification: Recompute HMAC over the JSON portion and compare with the appended digest.
+
+### 4.4 Receiver Identity
+
+The receiver field provides symmetric identity for the executing agent (counterpart to the issuer). After execution, the runtime MUST produce a signed receipt proving execution.
+
+- **Mandatory presence**: Every contract MUST include a `receiver` object with at least `agent_id`. The runtime MUST reject contracts without a receiver.
+- **Pre-execution verification**: If `receiver.pubkey` is present, the runtime SHOULD verify it matches the executing KeyManager's public key before execution. A mismatch indicates the contract was intended for a different executor.
+- **Receipt signing**: After successful execution, the runtime MUST compute a `receiver_receipt` and include it in the SER:
+  - Compute: `ser_hash = sha256(canonical_SER_json)`.
+  - Build payload: `{ser_hash}|{receiver.agent_id}|{timestamp}`.
+  - Sign with the executing KeyManager's ECDSA P-256 key.
+  - Store as: `{"agent_id": ..., "pubkey": PEM, "signature": hex, "timestamp": ISO8601Z}`.
+- **Verification**: Third parties MAY verify the receipt by loading the public key from `receiver_receipt.pubkey`, recomputing the payload, and verifying the ECDSA signature.
 
 ---
 

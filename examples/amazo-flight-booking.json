@@ -2,6 +2,7 @@
   "agenlang_version": "1.0",
   "contract_id": "urn:agenlang:exec:0123456789abcdef0123456789abcdef",
   "issuer": {"agent_id": "amazo-personal-472", "pubkey": "test-pubkey"},
+  "receiver": {"agent_id": "zhc-travel-agent"},
   "goal": "Delegate flight booking from LAX to SFO under $150 to ZHC travel agent",
   "intent_anchor": {"hash": "sha256:user-intent-flight-booking"},
   "constraints": {"joule_budget": 5000},

@@ -219,3 +219,41 @@ def test_runtime_protocol_dispatch(tmp_path: Path) -> None:
 
     assert result["status"] == "success"
     mock_mod.dispatch.assert_called_once()
+
+
+def test_runtime_receiver_receipt(tmp_path: Path) -> None:
+    """Execution produces a signed receiver_receipt in SER."""
+    km = KeyManager(key_path=tmp_path / "keys.pem")
+    km.generate()
+    contract = Contract.from_file(str(EXAMPLES_DIR / "amazo-flight-booking.json"))
+    runtime = Runtime(contract, key_manager=km)
+    result, ser = runtime.execute()
+    assert result["status"] == "success"
+    receipt = ser["receiver_receipt"]
+    assert receipt["agent_id"] == "zhc-travel-agent"
+    assert receipt["pubkey"]
+    assert receipt["signature"]
+    assert receipt["timestamp"]
+
+    import hashlib
+    import json
+
+    ser_for_hash = {k: v for k, v in ser.items() if k != "receiver_receipt"}
+    ser_hash = hashlib.sha256(
+        json.dumps(ser_for_hash, sort_keys=True).encode()
+    ).hexdigest()
+    payload = f"{ser_hash}|{receipt['agent_id']}|{receipt['timestamp']}"
+    pub_pem = receipt["pubkey"].encode("utf-8")
+    sig_bytes = bytes.fromhex(receipt["signature"])
+    assert km.verify(payload.encode("utf-8"), sig_bytes, pub_pem) is True
+
+
+def test_runtime_missing_receiver_raises(tmp_path: Path) -> None:
+    """Runtime rejects contract without receiver."""
+    km = KeyManager(key_path=tmp_path / "keys.pem")
+    km.generate()
+    contract = Contract.from_file(str(EXAMPLES_DIR / "amazo-flight-booking.json"))
+    contract.receiver = None  # type: ignore[assignment]
+    runtime = Runtime(contract, key_manager=km)
+    with pytest.raises(ValueError, match="requires a receiver"):
+        runtime.execute()

@@ -1,5 +1,6 @@
 """AgenLang Runtime - executes contracts with safety, audit, and settlement."""
 
+import hashlib
 import json
 import time
 from datetime import datetime, timezone
@@ -123,6 +124,9 @@ class Runtime:
         if self.contract.constraints.joule_budget <= 0:
             raise ValueError("Joule budget exhausted or invalid")
 
+        if not self.contract.receiver:
+            raise ValueError("Contract requires a receiver for execution")
+
         # Load existing memory if any
         loaded_memory = self.memory.load()
         log.debug("memory_loaded", memory=loaded_memory)
@@ -172,6 +176,24 @@ class Runtime:
             },
             "ledger_entries": self._ledger.to_dict(),
         }
+
+        # Sign receiver receipt
+        if self.contract.receiver:
+            km = self._get_key_manager()
+            ser_hash = hashlib.sha256(
+                json.dumps(ser, sort_keys=True).encode()
+            ).hexdigest()
+            receipt_ts = end_time.isoformat() + "Z"
+            receipt_payload = (
+                f"{ser_hash}|{self.contract.receiver.agent_id}|{receipt_ts}"
+            )
+            receipt_sig = km.sign(receipt_payload.encode("utf-8")).hex()
+            ser["receiver_receipt"] = {
+                "agent_id": self.contract.receiver.agent_id,
+                "pubkey": km.get_public_key_pem().decode("utf-8"),
+                "signature": receipt_sig,
+                "timestamp": receipt_ts,
+            }
 
         # Save replay file with HMAC integrity
         self._save_replay()
