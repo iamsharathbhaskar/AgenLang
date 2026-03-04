@@ -47,9 +47,7 @@ def _derive_did_from_ec_pubkey(pub: ec.EllipticCurvePublicKey) -> str:
 
 def derive_did_from_pubkey(pubkey_pem: bytes) -> str:
     """Derive did:key from PEM-encoded public key. Used for verification."""
-    loaded = serialization.load_pem_public_key(
-        pubkey_pem, backend=default_backend()
-    )
+    loaded = serialization.load_pem_public_key(pubkey_pem, backend=default_backend())
     assert isinstance(loaded, ec.EllipticCurvePublicKey)
     return _derive_did_from_ec_pubkey(loaded)
 

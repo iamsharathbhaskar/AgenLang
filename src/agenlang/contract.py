@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any, Dict, Optional
 from jsonschema import ValidationError, validate  # type: ignore[import-untyped]
 from pydantic import BaseModel, Field
 
+from .keys import derive_did_from_pubkey
 from .models import (
     CapabilityAttestation,
     Constraints,
@@ -25,8 +26,6 @@ from .models import (
     Settlement,
     Workflow,
 )
-
-from .keys import derive_did_from_pubkey
 
 if TYPE_CHECKING:
     from .keys import KeyManager

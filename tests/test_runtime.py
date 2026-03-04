@@ -25,9 +25,10 @@ def test_runtime_execute_e2e(tmp_path: Path) -> None:
     assert result["steps_completed"] == 2
     assert ser["execution_id"] == contract.contract_id
     assert ser["resource_usage"]["joules_used"] > 0
-    assert sum(
-        e["amount_joules"] for e in ser["ledger_entries"]
-    ) == ser["resource_usage"]["joules_used"]
+    assert (
+        sum(e["amount_joules"] for e in ser["ledger_entries"])
+        == ser["resource_usage"]["joules_used"]
+    )
     assert ser["resource_usage"]["efficiency_score"] >= 0.0
     assert ser["reputation_score"] >= 0.0
     assert ser["settlement_receipt"]["joule_recipient"]

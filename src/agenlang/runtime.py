@@ -21,6 +21,7 @@ from .utils import retry_with_backoff
 
 log = structlog.get_logger()
 
+
 # Canonical Joule formula per SPEC.md 5.6
 # 1 Joule = (input_tokens × 0.0001) + (output_tokens × 0.0003) + (wall_clock_seconds × 0.01)
 def _measure_joules(
@@ -29,11 +30,7 @@ def _measure_joules(
     wall_clock_seconds: float,
 ) -> float:
     """Compute Joules per canonical formula. See SPEC.md Ledger section."""
-    return (
-        input_tokens * 0.0001
-        + output_tokens * 0.0003
-        + wall_clock_seconds * 0.01
-    )
+    return input_tokens * 0.0001 + output_tokens * 0.0003 + wall_clock_seconds * 0.01
 
 
 def _estimate_tokens(text: str) -> float:
