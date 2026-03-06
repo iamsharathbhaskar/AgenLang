@@ -1,0 +1,101 @@
+schema_version: "1.0"
+metadata:
+  name: web-research
+  version: "1.0.0"
+  description: Research agent that searches the web and compiles findings
+  author: AgenLang
+  category: research
+  tags:
+    - research
+    - web
+    - search
+    - summarize
+    - analysis
+  parent: simple-agent
+variables:
+  - name: research_topic
+    description: Main topic to research
+    type: string
+    required: true
+    example: "climate change mitigation strategies"
+  - name: search_queries
+    description: List of specific search queries
+    type: list
+    required: false
+    default: []
+    example: ["latest climate tech", "carbon capture methods"]
+  - name: depth
+    description: Research depth (quick, standard, deep)
+    type: string
+    required: false
+    default: "standard"
+  - name: sources_required
+    description: Minimum number of sources to consult
+    type: integer
+    required: false
+    default: 3
+  - name: output_format
+    description: Desired output format (summary, detailed, citations)
+    type: string
+    required: false
+    default: "summary"
+template:
+  agenlang_version: "1.0"
+  contract_id: "{{contract_id}}"
+  issuer:
+    agent_id: "{{issuer_id}}"
+    pubkey: "{{issuer_pubkey}}"
+  receiver:
+    agent_id: "{{receiver_id}}"
+  goal: "Research: "{{research_topic}}"
+  intent_anchor:
+    hash: "sha256:{{intent_hash}}"
+  constraints:
+    joule_budget: "{{joule_budget}}"
+    pii_level: "{{pii_level}}"
+  workflow:
+    type: sequence
+    steps:
+      - action: tool
+        target: web_search
+        args:
+          query: "{{research_topic}}"
+          num_results: "{{sources_required}}"
+      - action: tool
+        target: web_search
+        args:
+          query: "{{research_topic}} latest news"
+          num_results: 5
+      - action: skill
+        target: analyze_sources
+        args:
+          min_sources: "{{sources_required}}"
+          credibility_threshold: 0.7
+      - action: tool
+        target: synthesize_research
+        args:
+          topic: "{{research_topic}}"
+          depth: "{{depth}}"
+          format: "{{output_format}}"
+  memory_contract:
+    handoff_keys:
+      - "search_results"
+      - "source_analysis"
+      - "research_summary"
+    ttl: "48h"
+    purge_on_complete: true
+  settlement:
+    joule_recipient: "{{receiver_id}}"
+    rate: 5.0
+  capability_attestations:
+    - capability: "net:read"
+      proof: "attested"
+    - capability: "search:web"
+      proof: "attested"
+    - capability: "compute:read"
+      proof: "attested"
+    - capability: "analysis:synthesize"
+      proof: "attested"
+  ser_config:
+    redaction: "{{pii_level}}"
+    replay_enabled: true

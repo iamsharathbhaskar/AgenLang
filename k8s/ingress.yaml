@@ -1,0 +1,126 @@
+# Ingress for AgenLang A2A Server
+# Requires ingress-nginx, Traefik, or another ingress controller
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: agenlang-server
+  namespace: agenlang
+  labels:
+    app.kubernetes.io/name: agenlang
+    app.kubernetes.io/component: ingress
+  annotations:
+    # Nginx specific annotations
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "300"
+    
+    # Rate limiting (Nginx)
+    nginx.ingress.kubernetes.io/limit-rps: "10"
+    nginx.ingress.kubernetes.io/limit-connections: "5"
+    
+    # CORS
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    
+    # Security headers
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      add_header X-Frame-Options "SAMEORIGIN" always;
+      add_header X-Content-Type-Options "nosniff" always;
+      add_header X-XSS-Protection "1; mode=block" always;
+      add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+      add_header Content-Security-Policy "default-src 'self'" always;
+    
+    # Cert manager for TLS
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    
+    # Traefik annotations (alternative to nginx)
+    # traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    # traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
+    # traefik.ingress.kubernetes.io/router.tls.options: default
+    
+    # AWS ALB annotations
+    # alb.ingress.kubernetes.io/scheme: internet-facing
+    # alb.ingress.kubernetes.io/target-type: ip
+    # alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+    # alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:region:account-id:certificate/...
+spec:
+  ingressClassName: nginx  # Change to your ingress class (nginx, traefik, alb, etc.)
+  tls:
+    - hosts:
+        - agenlang.example.com  # Change to your domain
+      secretName: agenlang-tls
+  rules:
+    - host: agenlang.example.com  # Change to your domain
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: agenlang-server
+                port:
+                  name: http
+---
+# Alternative: TLS-only ingress with cert-manager
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: agenlang-server-tls
+  namespace: agenlang
+  labels:
+    app.kubernetes.io/name: agenlang
+    app.kubernetes.io/component: ingress
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "300"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    # HSTS
+    nginx.ingress.kubernetes.io/hsts: "true"
+    nginx.ingress.kubernetes.io/hsts-max-age: "63072000"
+    nginx.ingress.kubernetes.io/hsts-include-subdomains: "true"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - api.agenlang.example.com
+      secretName: agenlang-api-tls
+  rules:
+    - host: api.agenlang.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: agenlang-server
+                port:
+                  name: http
+---
+# Gateway API (modern alternative to Ingress) - Kubernetes 1.24+
+# apiVersion: gateway.networking.k8s.io/v1
+# kind: HTTPRoute
+# metadata:
+#   name: agenlang-server
+#   namespace: agenlang
+# spec:
+#   parentRefs:
+#     - name: agenlang-gateway
+#   hostnames:
+#     - agenlang.example.com
+#   rules:
+#     - matches:
+#         - path:
+#             type: PathPrefix
+#             value: /
+#       backendRefs:
+#         - name: agenlang-server
+#           port: 8000

@@ -1,0 +1,53 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agenlang-config
+  namespace: agenlang
+  labels:
+    app.kubernetes.io/name: agenlang
+    app.kubernetes.io/component: config
+data:
+  # Core settings
+  AGENLANG_HOST: "0.0.0.0"
+  AGENLANG_PORT: "8000"
+  AGENLANG_DATA_DIR: "/data/agenlang"
+  AGENLANG_KEY_PATH: "/data/agenlang/keys.pem"
+  AGENLANG_JSON_LOGS: "true"
+  
+  # Logging
+  LOG_LEVEL: "INFO"
+  AGENLANG_LOG_LEVEL: "INFO"
+  
+  # Redis settings
+  AGENLANG_REDIS_ENABLED: "true"
+  REDIS_URL: "redis://redis:6379/0"
+  
+  # Rate limiting
+  RATE_LIMIT_ENABLED: "true"
+  RATE_LIMIT_REQUESTS_PER_MINUTE: "60"
+  
+  # LLM Provider settings (non-sensitive)
+  LLM_PROVIDER: "openai"
+  
+  # Uvicorn settings
+  UVICORN_WORKERS: "4"
+  UVICORN_LOG_LEVEL: "info"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agenlang-redis-config
+  namespace: agenlang
+  labels:
+    app.kubernetes.io/name: agenlang
+    app.kubernetes.io/component: redis-config
+data:
+  redis.conf: |
+    # Redis configuration for AgenLang
+    maxmemory 512mb
+    maxmemory-policy allkeys-lru
+    appendonly yes
+    appendfsync everysec
+    save 900 1
+    save 300 10
+    save 60 10000

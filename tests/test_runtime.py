@@ -89,37 +89,40 @@ def test_runtime_recursion_guard(tmp_path: Path) -> None:
         runtime._execute_step(contract.workflow.steps[0])
 
 
-def test_runtime_skill_not_implemented(tmp_path: Path) -> None:
-    """Skill action raises NotImplementedError."""
+def test_runtime_skill_requires_protocol_prefix(tmp_path: Path) -> None:
+    """Skill action without protocol prefix raises ValueError."""
     km = KeyManager(key_path=tmp_path / "keys.pem")
     km.generate()
     contract = Contract.from_file(str(EXAMPLES_DIR / "amazo-flight-booking.json"))
     contract.workflow.steps[0].action = "skill"
     runtime = Runtime(contract, key_manager=km)
-    with pytest.raises(NotImplementedError, match="skill:"):
+    with pytest.raises(ValueError, match="protocol prefix"):
         runtime.execute()
 
 
-def test_runtime_subcontract_not_implemented(tmp_path: Path) -> None:
-    """Subcontract action raises NotImplementedError."""
+def test_runtime_subcontract_missing_file(tmp_path: Path) -> None:
+    """Subcontract action with missing file raises ValueError."""
     km = KeyManager(key_path=tmp_path / "keys.pem")
     km.generate()
     contract = Contract.from_file(str(EXAMPLES_DIR / "amazo-flight-booking.json"))
     contract.workflow.steps[0].action = "subcontract"
+    contract.workflow.steps[0].args = {"contract_path": "/nonexistent/contract.json"}
     runtime = Runtime(contract, key_manager=km)
-    with pytest.raises(NotImplementedError, match="subcontract:"):
+    with pytest.raises(ValueError, match="Subcontract file not found"):
         runtime.execute()
 
 
-def test_runtime_embed_not_implemented(tmp_path: Path) -> None:
-    """Embed action raises NotImplementedError."""
+def test_runtime_embed_action(tmp_path: Path) -> None:
+    """Embed action generates mock embedding."""
     km = KeyManager(key_path=tmp_path / "keys.pem")
     km.generate()
     contract = Contract.from_file(str(EXAMPLES_DIR / "amazo-flight-booking.json"))
     contract.workflow.steps[0].action = "embed"
+    contract.workflow.steps[0].args = {"text": "test embedding text", "model": "test-model"}
     runtime = Runtime(contract, key_manager=km)
-    with pytest.raises(NotImplementedError, match="embed:"):
-        runtime.execute()
+    result, ser = runtime.execute()
+    assert result["status"] == "success"
+    assert result["steps_completed"] == 2
 
 
 def test_runtime_unknown_action(tmp_path: Path) -> None:

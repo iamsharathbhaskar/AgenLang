@@ -1,0 +1,113 @@
+# ServiceMonitor for Prometheus Operator
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: agenlang-server
+  namespace: agenlang
+  labels:
+    app.kubernetes.io/name: agenlang
+    app.kubernetes.io/component: monitoring
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: agenlang
+      app.kubernetes.io/component: server
+  endpoints:
+    - port: http
+      path: /metrics/prometheus
+      interval: 30s
+      scrapeTimeout: 10s
+---
+# PrometheusRule for alerts
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: agenlang-alerts
+  namespace: agenlang
+  labels:
+    app.kubernetes.io/name: agenlang
+    app.kubernetes.io/component: monitoring
+spec:
+  groups:
+    - name: agenlang
+      rules:
+        - alert: AgenLangHighErrorRate
+          expr: rate(agenlang_execution_errors_total[5m]) > 0.1
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "AgenLang high error rate detected"
+            description: "Error rate is {{ $value }} errors per second"
+        
+        - alert: AgenLangServerDown
+          expr: up{job="agenlang-server"} == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "AgenLang server is down"
+        
+        - alert: AgenLangHighLatency
+          expr: histogram_quantile(0.95, rate(agenlang_execution_duration_seconds_bucket[5m])) > 30
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "AgenLang high latency detected"
+        
+        - alert: AgenLangCircuitBreakerOpen
+          expr: agenlang_circuit_breaker_state > 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "AgenLang circuit breaker is open"
+---
+# Grafana Dashboard ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agenlang-dashboard
+  namespace: agenlang
+  labels:
+    grafana_dashboard: "1"
+data:
+  agenlang.json: |
+    {
+      "dashboard": {
+        "title": "AgenLang Server",
+        "tags": ["agenlang", "a2a"],
+        "timezone": "utc",
+        "panels": [
+          {
+            "title": "Execution Rate",
+            "type": "stat",
+            "targets": [{
+              "expr": "rate(agenlang_executions_total[5m])"
+            }]
+          },
+          {
+            "title": "Error Rate",
+            "type": "stat",
+            "targets": [{
+              "expr": "rate(agenlang_execution_errors_total[5m])"
+            }]
+          },
+          {
+            "title": "Response Time P95",
+            "type": "graph",
+            "targets": [{
+              "expr": "histogram_quantile(0.95, rate(agenlang_execution_duration_seconds_bucket[5m]))"
+            }]
+          },
+          {
+            "title": "Joules Consumed",
+            "type": "graph",
+            "targets": [{
+              "expr": "sum(rate(agenlang_joules_consumed_total[1h]))"
+            }]
+          }
+        ]
+      }
+    }

@@ -1,0 +1,111 @@
+schema_version: "1.0"
+metadata:
+  name: base
+  version: "1.0.0"
+  description: Base template with common fields and defaults for all AgenLang contracts
+  author: AgenLang
+  category: base
+  tags:
+    - base
+    - foundation
+    - default
+  parent: null
+variables:
+  - name: contract_id
+    description: Unique contract identifier (auto-generated if empty)
+    type: string
+    required: false
+    default: ""
+    example: "urn:agenlang:exec:a1b2c3..."
+  - name: issuer_id
+    description: DID or identifier of the contract issuer
+    type: string
+    required: true
+    example: "did:key:z123..."
+  - name: issuer_pubkey
+    description: Issuer public key in PEM format
+    type: string
+    required: false
+    default: ""
+  - name: receiver_id
+    description: DID or identifier of the target agent
+    type: string
+    required: true
+    example: "did:key:z456..."
+  - name: receiver_pubkey
+    description: Receiver public key in PEM format
+    type: string
+    required: false
+    default: ""
+  - name: goal
+    description: Contract goal or objective
+    type: string
+    required: true
+    example: "Complete the specified task"
+  - name: intent_hash
+    description: Intent anchor hash
+    type: string
+    required: false
+    default: "auto"
+    example: "sha256:abc123..."
+  - name: joule_budget
+    description: Maximum joule budget for execution
+    type: float
+    required: true
+    example: 1000.0
+  - name: pii_level
+    description: PII handling level (none, minimal, gdpr_standard, hipaa)
+    type: string
+    required: false
+    default: "minimal"
+    example: "minimal"
+  - name: ttl
+    description: Memory time-to-live
+    type: string
+    required: false
+    default: "24h"
+    example: "1h"
+  - name: purge_on_complete
+    description: Purge memory after completion
+    type: boolean
+    required: false
+    default: true
+  - name: settlement_rate
+    description: Joule settlement rate
+    type: float
+    required: false
+    default: 1.0
+  - name: replay_enabled
+    description: Enable SER replay
+    type: boolean
+    required: false
+    default: true
+template:
+  agenlang_version: "1.0"
+  contract_id: "{{contract_id}}"
+  issuer:
+    agent_id: "{{issuer_id}}"
+    pubkey: "{{issuer_pubkey}}"
+  receiver:
+    agent_id: "{{receiver_id}}"
+    pubkey: "{{receiver_pubkey}}"
+  goal: "{{goal}}"
+  intent_anchor:
+    hash: "sha256:{{intent_hash}}"
+  constraints:
+    joule_budget: "{{joule_budget}}"
+    pii_level: "{{pii_level}}"
+  workflow:
+    type: sequence
+    steps: []
+  memory_contract:
+    handoff_keys: []
+    ttl: "{{ttl}}"
+    purge_on_complete: "{{purge_on_complete}}"
+  settlement:
+    joule_recipient: "{{receiver_id}}"
+    rate: "{{settlement_rate}}"
+  capability_attestations: []
+  ser_config:
+    redaction: "{{pii_level}}"
+    replay_enabled: "{{replay_enabled}}"

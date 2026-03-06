@@ -1,0 +1,152 @@
+schema_version: "1.0"
+metadata:
+  name: data-pipeline
+  version: "1.0.0"
+  description: Multi-step data processing pipeline with transformation stages
+  author: AgenLang
+  category: data-processing
+  tags:
+    - pipeline
+    - data
+    - etl
+    - processing
+    - multi-step
+  parent: null
+variables:
+  - name: goal
+    description: Overall pipeline goal
+    type: string
+    required: true
+    example: "Process customer data and generate reports"
+  - name: issuer_id
+    description: DID or identifier of the contract issuer
+    type: string
+    required: true
+    example: "did:key:z123..."
+  - name: receiver_id
+    description: DID or identifier of the target agent
+    type: string
+    required: true
+    example: "did:key:z456..."
+  - name: joule_budget
+    description: Maximum joule budget for entire pipeline
+    type: float
+    required: true
+    example: 10000.0
+  - name: data_source
+    description: Source data reference or URL
+    type: string
+    required: true
+    example: "s3://bucket/data.csv"
+  - name: output_destination
+    description: Where to store processed results
+    type: string
+    required: true
+    example: "s3://bucket/output/"
+  - name: steps
+    description: Number of processing steps
+    type: integer
+    required: false
+    default: 3
+    example: 3
+  - name: pii_level
+    description: PII handling level
+    type: string
+    required: false
+    default: "gdpr_standard"
+  - name: enable_checkpoint
+    description: Enable checkpointing between stages
+    type: boolean
+    required: false
+    default: true
+  - name: purge_after
+    description: Purge intermediate data after completion
+    type: boolean
+    required: false
+    default: true
+template:
+  agenlang_version: "1.0"
+  contract_id: "{{contract_id}}"
+  issuer:
+    agent_id: "{{issuer_id}}"
+    pubkey: "{{issuer_pubkey}}"
+  receiver:
+    agent_id: "{{receiver_id}}"
+  goal: "{{goal}}"
+  intent_anchor:
+    hash: "sha256:{{intent_hash}}"
+  constraints:
+    joule_budget: "{{joule_budget}}"
+    pii_level: "{{pii_level}}"
+    ethical:
+      - "data_minimization"
+      - "purpose_limitation"
+  workflow:
+    type: sequence
+    steps:
+      - action: tool
+        target: data_ingest
+        args:
+          source: "{{data_source}}"
+          format: auto_detect
+        on_error:
+          retry: 2
+          fallback: abort
+          notify_intent_anchor: true
+      - action: tool
+        target: data_validate
+        args:
+          schema: auto_infer
+          strict_mode: true
+        on_error:
+          retry: 1
+          escalate_to: "{{issuer_id}}"
+      - action: tool
+        target: data_transform
+        args:
+          operations:
+            - clean
+            - normalize
+            - enrich
+        on_error:
+          retry: 1
+          fallback: skip_invalid
+      - action: tool
+        target: data_analyze
+        args:
+          operations:
+            - aggregate
+            - summarize
+      - action: tool
+        target: data_export
+        args:
+          destination: "{{output_destination}}"
+          format: json
+    on_error:
+      retry: 0
+      fallback: abort
+      notify_intent_anchor: true
+  memory_contract:
+    handoff_keys:
+      - "raw_data"
+      - "validated_data"
+      - "transformed_data"
+      - "analysis_results"
+    ttl: "48h"
+    purge_on_complete: "{{purge_after}}"
+    data_subject: "{{issuer_id}}"
+  settlement:
+    joule_recipient: "{{receiver_id}}"
+    rate: 8.5
+  capability_attestations:
+    - capability: "data:read"
+      proof: "attested"
+    - capability: "data:write"
+      proof: "attested"
+    - capability: "compute:read"
+      proof: "attested"
+    - capability: "storage:write"
+      proof: "attested"
+  ser_config:
+    redaction: "{{pii_level}}"
+    replay_enabled: "{{enable_checkpoint}}"

@@ -1,0 +1,110 @@
+schema_version: "1.0"
+metadata:
+  name: multi-agent
+  version: "1.0.0"
+  description: Multi-agent coordination pattern for distributed task execution
+  author: AgenLang
+  category: coordination
+  tags:
+    - multi-agent
+    - coordination
+    - distributed
+    - parallel
+  parent: a2a-delegation
+variables:
+  - name: goal
+    description: Overall coordination goal
+    type: string
+    required: true
+    example: "Analyze market trends across multiple regions"
+  - name: issuer_id
+    description: Coordinator agent ID
+    type: string
+    required: true
+  - name: agent_count
+    description: Number of sub-agents to coordinate
+    type: integer
+    required: true
+    example: 3
+  - name: agent_ids
+    description: List of sub-agent IDs
+    type: list
+    required: true
+    example: ["agent1", "agent2", "agent3"]
+  - name: task_distribution
+    description: How to distribute tasks (round_robin, capability_based, random)
+    type: string
+    required: false
+    default: "round_robin"
+  - name: aggregation_strategy
+    description: How to aggregate results (merge, vote, average, custom)
+    type: string
+    required: false
+    default: "merge"
+  - name: joule_budget
+    description: Total budget distributed across agents
+    type: float
+    required: true
+    example: 15000.0
+  - name: timeout
+    description: Maximum wait time for all agents
+    type: string
+    required: false
+    default: "10m"
+template:
+  agenlang_version: "1.0"
+  contract_id: "{{contract_id}}"
+  issuer:
+    agent_id: "{{issuer_id}}"
+    pubkey: "{{issuer_pubkey}}"
+  receiver:
+    agent_id: "coordinator"
+  goal: "{{goal}}"
+  intent_anchor:
+    hash: "sha256:{{intent_hash}}"
+  constraints:
+    joule_budget: "{{joule_budget}}"
+    pii_level: "{{pii_level}}"
+  workflow:
+    type: sequence
+    steps:
+      - action: skill
+        target: decompose_task
+        args:
+          agent_count: "{{agent_count}}"
+          distribution_strategy: "{{task_distribution}}"
+      - action: skill
+        target: spawn_subcontracts
+        args:
+          agent_ids: "{{agent_ids}}"
+          sub_budget: "{{joule_budget // agent_count}}"
+          timeout: "{{timeout}}"
+      - action: skill
+        target: aggregate_results
+        args:
+          strategy: "{{aggregation_strategy}}"
+          expected_count: "{{agent_count}}"
+        on_error:
+          retry: 0
+          fallback: partial_results
+          escalate_to: "{{issuer_id}}"
+  memory_contract:
+    handoff_keys:
+      - "task_decomposition"
+      - "subcontract_results"
+      - "aggregated_output"
+    ttl: "{{timeout}}"
+    purge_on_complete: true
+  settlement:
+    joule_recipient: "coordinator"
+    rate: 15.0
+  capability_attestations:
+    - capability: "coordination:decompose"
+      proof: "attested"
+    - capability: "a2a:delegate"
+      proof: "attested"
+    - capability: "aggregation:merge"
+      proof: "attested"
+  ser_config:
+    redaction: "{{pii_level}}"
+    replay_enabled: true

@@ -78,6 +78,7 @@ def test_llm_config_xai(monkeypatch: pytest.MonkeyPatch) -> None:
     """LLMConfig defaults to xai provider."""
     monkeypatch.setenv("LLM_API_KEY", "test-key")
     monkeypatch.setenv("LLM_PROVIDER", "xai")
+    monkeypatch.delenv("LLM_MODEL", raising=False)
     config = LLMConfig.from_env()
     assert config.provider == "xai"
     assert config.api_key == "test-key"
@@ -89,6 +90,7 @@ def test_llm_config_openai(monkeypatch: pytest.MonkeyPatch) -> None:
     """LLMConfig with openai provider."""
     monkeypatch.setenv("LLM_PROVIDER", "openai")
     monkeypatch.setenv("LLM_API_KEY", "oai-key")
+    monkeypatch.delenv("LLM_MODEL", raising=False)
     config = LLMConfig.from_env()
     assert config.provider == "openai"
     assert "openai.com" in config.base_url
@@ -99,6 +101,7 @@ def test_llm_config_anthropic(monkeypatch: pytest.MonkeyPatch) -> None:
     """LLMConfig with anthropic provider."""
     monkeypatch.setenv("LLM_PROVIDER", "anthropic")
     monkeypatch.setenv("LLM_API_KEY", "ant-key")
+    monkeypatch.delenv("LLM_MODEL", raising=False)
     config = LLMConfig.from_env()
     assert config.provider == "anthropic"
     assert "anthropic.com" in config.base_url

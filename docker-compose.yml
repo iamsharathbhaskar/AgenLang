@@ -1,0 +1,162 @@
+version: "3.8"
+
+services:
+  # AgenLang A2A Server
+  agenlang-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: agenlang-server
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      # Core settings
+      AGENLANG_HOST: 0.0.0.0
+      AGENLANG_PORT: 8000
+      AGENLANG_DATA_DIR: /data/agenlang
+      AGENLANG_KEY_PATH: /data/agenlang/keys.pem
+      AGENLANG_JSON_LOGS: "true"
+      
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      AGENLANG_LOG_LEVEL: ${AGENLANG_LOG_LEVEL:-INFO}
+      
+      # Database (optional PostgreSQL backend)
+      DATABASE_URL: ${DATABASE_URL:-}
+      
+      # Redis (for memory backend & rate limiting)
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      AGENLANG_REDIS_ENABLED: "${AGENLANG_REDIS_ENABLED:-true}"
+      
+      # Rate limiting
+      RATE_LIMIT_ENABLED: "${RATE_LIMIT_ENABLED:-true}"
+      RATE_LIMIT_REQUESTS_PER_MINUTE: "${RATE_LIMIT_REQUESTS_PER_MINUTE:-60}"
+      
+      # API Keys (set in .env file, NOT in docker-compose)
+      TAVILY_API_KEY: ${TAVILY_API_KEY:-}
+      LLM_PROVIDER: ${LLM_PROVIDER:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      XAI_API_KEY: ${XAI_API_KEY:-}
+      
+    volumes:
+      # Persistent data
+      - agenlang-data:/data/agenlang
+      # Mount .env for secrets (optional)
+      - ./.env:/app/.env:ro
+    networks:
+      - agenlang-network
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    security_opt:
+      - no-new-privileges:true
+    read_only: false  # Keys and data need write access
+
+  # PostgreSQL (optional - for testing PG backend)
+  postgres:
+    image: postgres:16-alpine
+    container_name: agenlang-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-agenlang}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-agenlang_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-agenlang}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - agenlang-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-agenlang}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    profiles:
+      - postgres
+      - full
+
+  # Redis (for memory backend & rate limiting)
+  redis:
+    image: redis:7-alpine
+    container_name: agenlang-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    networks:
+      - agenlang-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Prometheus (optional - for metrics)
+  prometheus:
+    image: prom/prometheus:v2.50.0
+    container_name: agenlang-prometheus
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - agenlang-network
+    profiles:
+      - monitoring
+      - full
+
+  # Grafana (optional - for dashboards)
+  grafana:
+    image: grafana/grafana:10.3.0
+    container_name: agenlang-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    ports:
+      - "3000:3000"
+    networks:
+      - agenlang-network
+    depends_on:
+      - prometheus
+    profiles:
+      - monitoring
+      - full
+
+volumes:
+  agenlang-data:
+    driver: local
+  postgres-data:
+    driver: local
+  redis-data:
+    driver: local
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
+
+networks:
+  agenlang-network:
+    driver: bridge

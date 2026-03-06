@@ -1,0 +1,127 @@
+schema_version: "1.0"
+metadata:
+  name: a2a-delegation
+  version: "1.0.0"
+  description: Contract for delegating work to another agent via A2A protocol
+  author: AgenLang
+  category: delegation
+  tags:
+    - a2a
+    - delegation
+    - inter-agent
+    - multi-agent
+  parent: null
+variables:
+  - name: goal
+    description: The goal to delegate to the receiving agent
+    type: string
+    required: true
+    example: "Find and book a flight from LAX to SFO"
+  - name: issuer_id
+    description: DID or identifier of the contract issuer
+    type: string
+    required: true
+    example: "did:key:z123..."
+  - name: receiver_id
+    description: DID or identifier of the target agent
+    type: string
+    required: true
+    example: "did:key:z456..."
+  - name: receiver_endpoint
+    description: A2A endpoint URL of the receiving agent
+    type: string
+    required: false
+    example: "https://agent.example.com/a2a"
+  - name: joule_budget
+    description: Maximum joule budget for delegated execution
+    type: float
+    required: true
+    example: 5000.0
+  - name: max_usd
+    description: Maximum USD cost allowed
+    type: float
+    required: false
+    default: 100.0
+    example: 150.0
+  - name: pii_level
+    description: PII handling level
+    type: string
+    required: false
+    default: "gdpr_standard"
+    example: "minimal"
+  - name: task_description
+    description: Detailed description of the delegated task
+    type: string
+    required: true
+    example: "Search for flights, compare prices, and book the best option"
+  - name: required_capabilities
+    description: List of required capabilities
+    type: list
+    required: false
+    default: []
+    example: ["net:read", "booking:write"]
+  - name: callback_url
+    description: URL to receive execution results
+    type: string
+    required: false
+    example: "https://callback.example.com/results"
+  - name: timeout
+    description: Execution timeout
+    type: string
+    required: false
+    default: "5m"
+    example: "10m"
+template:
+  agenlang_version: "1.0"
+  contract_id: "{{contract_id}}"
+  issuer:
+    agent_id: "{{issuer_id}}"
+    pubkey: "{{issuer_pubkey}}"
+  receiver:
+    agent_id: "{{receiver_id}}"
+    pubkey: "{{receiver_pubkey}}"
+  goal: "{{goal}}"
+  intent_anchor:
+    hash: "sha256:{{intent_hash}}"
+  constraints:
+    joule_budget: "{{joule_budget}}"
+    max_usd: "{{max_usd}}"
+    pii_level: "{{pii_level}}"
+    ethical:
+      - "no_harm"
+      - "privacy_preserving"
+  workflow:
+    type: sequence
+    steps:
+      - action: subcontract
+        target: "a2a_delegation"
+        args:
+          target_agent: "{{receiver_id}}"
+          endpoint: "{{receiver_endpoint}}"
+          task: "{{task_description}}"
+          required_capabilities: "{{required_capabilities}}"
+          callback_url: "{{callback_url}}"
+          timeout: "{{timeout}}"
+        on_error:
+          retry: 1
+          fallback: "escalate_to_human"
+          escalate_to: "{{issuer_id}}"
+  memory_contract:
+    handoff_keys:
+      - "delegation_context"
+      - "task_results"
+    ttl: "{{timeout}}"
+    purge_on_complete: true
+    data_subject: "{{issuer_id}}"
+  settlement:
+    joule_recipient: "{{receiver_id}}"
+    rate: 12.5
+    micro_payment_address: ""
+  capability_attestations:
+    - capability: "a2a:delegate"
+      proof: "attested"
+    - capability: "net:read"
+      proof: "attested"
+  ser_config:
+    redaction: "{{pii_level}}"
+    replay_enabled: true

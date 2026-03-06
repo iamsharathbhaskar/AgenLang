@@ -1,0 +1,110 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+pythonenv*
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.sublime-project
+*.sublime-workspace
+
+# Testing
+.pytest_cache/
+.hypothesis/
+.coverage
+.coverage.*
+htmlcov/
+tox.ini
+.nox/
+.
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Documentation
+docs/_build/
+site/
+mkdocs.yml
+
+# CI/CD
+.github/
+.travis.yml
+.gitlab-ci.yml
+azure-pipelines.yml
+
+# Local data (mount as volumes instead)
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+*.log
+*.replay
+*.ser.json
+*.memory.json
+*.memory.db
+*.memory.enc
+*.pem
+*.key
+*keys/
+
+# Secrets
+.env
+.env.*
+.secrets
+*.secret
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.docker/
+
+# Kubernetes
+k8s/
+helm/
+
+# Misc
+Makefile
+README.md
+CHANGELOG.md
+LICENSE
+CONTRIBUTING.md
+CODE_OF_CONDUCT.md
+*.md
+
+# Keep example contracts
+!examples/
+!examples/*.json

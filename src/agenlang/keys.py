@@ -100,6 +100,14 @@ class KeyManager:
         self._private_key = loaded
         return self._private_key
 
+    def key_exists(self) -> bool:
+        """Check if key file exists on disk.
+
+        Returns:
+            True if key file exists.
+        """
+        return self._key_path.exists()
+
     def get_or_create(self) -> ec.EllipticCurvePrivateKey:
         """Get existing key or generate new one.
 

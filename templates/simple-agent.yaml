@@ -1,0 +1,90 @@
+schema_version: "1.0"
+metadata:
+  name: simple-agent
+  version: "1.0.0"
+  description: A simple single-purpose agent contract for basic tasks
+  author: AgenLang
+  category: general
+  tags:
+    - simple
+    - basic
+    - single-task
+  parent: null
+variables:
+  - name: goal
+    description: The main goal or objective for the agent
+    type: string
+    required: true
+    example: "Research quantum computing advances in 2024"
+  - name: issuer_id
+    description: DID or identifier of the contract issuer
+    type: string
+    required: true
+    example: "did:key:z123..."
+  - name: receiver_id
+    description: DID or identifier of the target agent
+    type: string
+    required: true
+    example: "did:key:z456..."
+  - name: joule_budget
+    description: Maximum joule budget for execution
+    type: float
+    required: true
+    example: 1000.0
+  - name: tool
+    description: Primary tool to use for this task
+    type: string
+    required: false
+    default: "web_search"
+    example: "web_search"
+  - name: query
+    description: Query or input for the tool
+    type: string
+    required: true
+    example: "latest quantum computing news"
+  - name: ttl
+    description: Memory time-to-live
+    type: string
+    required: false
+    default: "24h"
+    example: "1h"
+template:
+  agenlang_version: "1.0"
+  contract_id: "{{contract_id}}"
+  issuer:
+    agent_id: "{{issuer_id}}"
+    pubkey: "{{issuer_pubkey}}"
+  receiver:
+    agent_id: "{{receiver_id}}"
+  goal: "{{goal}}"
+  intent_anchor:
+    hash: "sha256:{{intent_hash}}"
+  constraints:
+    joule_budget: "{{joule_budget}}"
+    pii_level: "minimal"
+  workflow:
+    type: sequence
+    steps:
+      - action: tool
+        target: "{{tool}}"
+        args:
+          query: "{{query}}"
+      - action: tool
+        target: summarize
+        args:
+          text: "{{tool}}_results"
+  memory_contract:
+    handoff_keys: []
+    ttl: "{{ttl}}"
+    purge_on_complete: true
+  settlement:
+    joule_recipient: "{{receiver_id}}"
+    rate: 1.0
+  capability_attestations:
+    - capability: "net:read"
+      proof: "attested"
+    - capability: "compute:read"
+      proof: "attested"
+  ser_config:
+    redaction: minimal
+    replay_enabled: true

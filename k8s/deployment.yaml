@@ -1,0 +1,255 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agenlang-server
+  namespace: agenlang
+  labels:
+    app.kubernetes.io/name: agenlang
+    app.kubernetes.io/component: server
+    app.kubernetes.io/version: "0.4.2"
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: agenlang
+      app.kubernetes.io/component: server
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: agenlang
+        app.kubernetes.io/component: server
+        app.kubernetes.io/version: "0.4.2"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: agenlang
+      securityContext:
+        fsGroup: 1000
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: server
+          image: agenlang/server:0.4.2
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          env:
+            # From ConfigMap
+            - name: AGENLANG_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: agenlang-config
+                  key: AGENLANG_HOST
+            - name: AGENLANG_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: agenlang-config
+                  key: AGENLANG_PORT
+            - name: AGENLANG_DATA_DIR
+              valueFrom:
+                configMapKeyRef:
+                  name: agenlang-config
+                  key: AGENLANG_DATA_DIR
+            - name: AGENLANG_KEY_PATH
+              valueFrom:
+                configMapKeyRef:
+                  name: agenlang-config
+                  key: AGENLANG_KEY_PATH
+            - name: AGENLANG_JSON_LOGS
+              valueFrom:
+                configMapKeyRef:
+                  name: agenlang-config
+                  key: AGENLANG_JSON_LOGS
+            - name: LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: agenlang-config
+                  key: LOG_LEVEL
+            - name: AGENLANG_LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: agenlang-config
+                  key: AGENLANG_LOG_LEVEL
+            - name: RATE_LIMIT_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: agenlang-config
+                  key: RATE_LIMIT_ENABLED
+            - name: RATE_LIMIT_REQUESTS_PER_MINUTE
+              valueFrom:
+                configMapKeyRef:
+                  name: agenlang-config
+                  key: RATE_LIMIT_REQUESTS_PER_MINUTE
+            - name: AGENLANG_REDIS_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: agenlang-config
+                  key: AGENLANG_REDIS_ENABLED
+            - name: REDIS_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: agenlang-config
+                  key: REDIS_URL
+            # From Secrets
+            - name: TAVILY_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: agenlang-secrets
+                  key: TAVILY_API_KEY
+                  optional: true
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: agenlang-secrets
+                  key: OPENAI_API_KEY
+                  optional: true
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: agenlang-secrets
+                  key: ANTHROPIC_API_KEY
+                  optional: true
+            - name: XAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: agenlang-secrets
+                  key: XAI_API_KEY
+                  optional: true
+            - name: LLM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: agenlang-secrets
+                  key: LLM_API_KEY
+                  optional: true
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: agenlang-secrets
+                  key: DATABASE_URL
+                  optional: true
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: agenlang-secrets
+                  key: REDIS_PASSWORD
+                  optional: true
+            # POD metadata for observability
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false  # Keys need write access
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 30
+          volumeMounts:
+            - name: data
+              mountPath: /data/agenlang
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: agenlang-data
+        - name: tmp
+          emptyDir: {}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: agenlang
+              app.kubernetes.io/component: server
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: agenlang
+                    app.kubernetes.io/component: server
+                topologyKey: kubernetes.io/hostname
+---
+# ServiceAccount
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: agenlang
+  namespace: agenlang
+  labels:
+    app.kubernetes.io/name: agenlang
+    app.kubernetes.io/component: serviceaccount
+automountServiceAccountToken: false
+---
+# PersistentVolumeClaim for data
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: agenlang-data
+  namespace: agenlang
+  labels:
+    app.kubernetes.io/name: agenlang
+    app.kubernetes.io/component: storage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: fast-rwo  # Adjust to your cluster's storage class

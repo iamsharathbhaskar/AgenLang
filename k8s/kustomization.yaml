@@ -1,0 +1,62 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: agenlang
+
+namespace: agenlang
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - secret.yaml
+  - redis.yaml
+  - postgres.yaml
+  - deployment.yaml
+  - service.yaml
+  - ingress.yaml
+  - hpa.yaml
+  - monitoring.yaml
+  - network-policy.yaml
+
+commonLabels:
+  app.kubernetes.io/name: agenlang
+  app.kubernetes.io/managed-by: kustomize
+
+images:
+  - name: agenlang/server
+    newTag: 0.4.2
+
+configMapGenerator:
+  - name: agenlang-config-extra
+    literals:
+      - AGENLANG_ENV=production
+
+# Use secret generator for secrets (DO NOT commit real values)
+# Generate with: kustomize edit set secret agenlang-secrets --from-literal=KEY=VALUE
+secretGenerator:
+  - name: agenlang-secrets-generated
+    envs:
+      - secrets.env
+    type: Opaque
+    options:
+      disableNameSuffixHash: true
+
+# Patcher for resource limits
+patches:
+  - target:
+      kind: Deployment
+      name: agenlang-server
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: agenlang-server
+      spec:
+        template:
+          spec:
+            containers:
+              - name: server
+                resources:
+                  limits:
+                    memory: 2Gi

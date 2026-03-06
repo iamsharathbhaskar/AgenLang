@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: agenlang
+  labels:
+    app.kubernetes.io/name: agenlang
+    app.kubernetes.io/version: "0.4.2"
+    app.kubernetes.io/component: namespace
+    app.kubernetes.io/managed-by: kubectl
