@@ -1,3 +1,4 @@
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
@@ -23,9 +24,28 @@ wheels/
 htmlcov/
 .mypy_cache/
 .ruff_cache/
-.agenlang/
-*.db
-.env
+
+# Virtual environments
 .venv
 env/
 venv/
+
+# Environment
+.env
+
+# Runtime data
+.agenlang/
+*.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# macOS
+.DS_Store
+
+# Testing (keep tests/ directory, but not temp files)
+test_*.py
+*_test.py
