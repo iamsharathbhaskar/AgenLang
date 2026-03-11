@@ -123,35 +123,47 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
+| SET-01 | Phase 0 | Pending |
+| SET-02 | Phase 0 | Pending |
+| SET-03 | Phase 0 | Pending |
+| SET-04 | Phase 3 | Pending |
 | ID-01 | Phase 1 | Pending |
 | ID-02 | Phase 1 | Pending |
 | ID-03 | Phase 1 | Pending |
 | ID-04 | Phase 1 | Pending |
 | ID-05 | Phase 1 | Pending |
-| SCH-01 | Phase 0 | Pending |
+| SCH-01 | Phase 1 | Pending |
 | SCH-02 | Phase 1 | Pending |
 | SCH-03 | Phase 1 | Pending |
 | SCH-04 | Phase 1 | Pending |
 | SCH-05 | Phase 1 | Pending |
 | SCH-06 | Phase 1 | Pending |
-| TRN-01 | Phase 0 | Pending |
-| TRN-02 | Phase 0 | Pending |
-| TRN-03 | Phase 0 | Pending |
+| TRN-01 | Phase 1 | Pending |
+| TRN-02 | Phase 1 | Pending |
+| TRN-03 | Phase 1 | Pending |
 | TRN-04 | Phase 1 | Pending |
 | TRN-05 | Phase 1 | Pending |
-| COR-01 | Phase 0 | Pending |
-| COR-02 | Phase 0 | Pending |
-| COR-03 | Phase 0 | Pending |
-| COR-04 | Phase 0 | Pending |
+| COR-01 | Phase 1 | Pending |
+| COR-02 | Phase 1 | Pending |
+| COR-03 | Phase 1 | Pending |
+| COR-04 | Phase 1 | Pending |
 | COR-05 | Phase 1 | Pending |
 | COR-06 | Phase 1 | Pending |
 | COR-07 | Phase 1 | Pending |
 | COR-08 | Phase 1 | Pending |
 | COR-09 | Phase 1 | Pending |
+| CTR-01 | Phase 1 | Pending |
+| CTR-02 | Phase 1 | Pending |
+| CTR-03 | Phase 2 | Pending |
+| DSC-01 | Phase 1 | Pending |
+| DSC-02 | Phase 1 | Pending |
+| DSC-03 | Phase 1 | Pending |
+| DSC-04 | Phase 1 | Pending |
+| DSC-05 | Phase 1 | Pending |
 | NEG-01 | Phase 2 | Pending |
 | NEG-02 | Phase 2 | Pending |
 | NEG-03 | Phase 2 | Pending |
-| NEG-04 | Phase 2 | Pending |
+| NEG 2 | Pending-04 | Phase |
 | NEG-05 | Phase 2 | Pending |
 | ECO-01 | Phase 2 | Pending |
 | ECO-02 | Phase 2 | Pending |
@@ -166,22 +178,10 @@
 | BRD-03 | Phase 3 | Pending |
 | BRD-04 | Phase 3 | Pending |
 | BRD-05 | Phase 3 | Pending |
-| CTR-01 | Phase 1 | Pending |
-| CTR-02 | Phase 1 | Pending |
-| CTR-03 | Phase 2 | Pending |
-| DSC-01 | Phase 0 | Pending |
-| DSC-02 | Phase 0 | Pending |
-| DSC-03 | Phase 1 | Pending |
-| DSC-04 | Phase 1 | Pending |
-| DSC-05 | Phase 0 | Pending |
-| SET-01 | Phase 0 | Pending |
-| SET-02 | Phase 0 | Pending |
-| SET-03 | Phase 0 | Pending |
-| SET-04 | Phase 3 | Pending |
 
 **Coverage:**
-- v1 requirements: 54 total
-- Mapped to phases: 54
+- v1 requirements: 55 total
+- Mapped to phases: 55
 - Unmapped: 0 ✓
 
 ---
