@@ -95,7 +95,7 @@ class Database:
 
         async with self._conn.execute(
             """
- NOT EXISTS message_queue            CREATE TABLE IF (
+            CREATE TABLE IF NOT EXISTS message_queue (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 receiver_did TEXT,
                 message_data TEXT,

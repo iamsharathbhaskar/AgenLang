@@ -1,105 +1,109 @@
 # AgenLang Roadmap
 
-**Project:** AgenLang Core Protocol  
-**Generated:** 2026-03-11  
+**Project:** AgenLang Core Protocol (Revised - A2A-Based)  
+**Generated:** 2026-03-12  
 **Granularity:** Coarse  
-**Phases:** 4
+**Phases:** 5
 
 ## Phases
 
-- [ ] **Phase 0: Setup** - Project scaffolding, pyproject.toml, dependencies
-- [ ] **Phase 1: Protocol Foundation** - Identity, Schema, Transport, Core Agent, Discovery
-- [ ] **Phase 2: Exchange & Economy** - CNP Negotiation, JouleMeter, Contracts, Settlement
-- [ ] **Phase 3: Bridge & CLI** - MCP Bridge, CLI tools, Polish
+- [ ] **Phase 0: Cleanup** - Remove old implementation artifacts
+- [ ] **Phase 1: Scaffolding** - Project setup, dependencies, A2A integration
+- [ ] **Phase 2: Identity & Semantics** - DID:key, FIPA-ACL, RFC 8785 signing
+- [ ] **Phase 3: Client Implementation** - Simple AgentClient class
+- [ ] **Phase 4: Economy** - JouleMeter, SER, CNP negotiation
 
 ---
 
 ## Phase Details
 
-### Phase 0: Setup
+### Phase 0: Cleanup
 
-**Goal:** Project scaffolding with src layout, dependencies, and CLI entry point
+**Goal:** Remove old implementation artifacts that don't fit the new A2A-based architecture
 
-**Depends on:** Nothing (first phase)
-
-**Requirements:** SET-01, SET-02, SET-03, SET-04
+**Depends on:** Nothing
 
 **Success Criteria** (what must be TRUE):
-1. `pyproject.toml` exists with src layout and all core dependencies
+1. Delete `src/agenlang/core.py` (old BaseAgent framework)
+2. Delete `src/agenlang/transport/` (replaced by A2A SDK)
+3. Clean up old test files that reference deleted code
+4. Keep `identity.py`, `schema.py` (will be reused)
+5. Keep `pyproject.toml` (update dependencies)
+
+**Plans:** 1 plan
+
+---
+
+### Phase 1: Scaffolding
+
+**Goal:** Set up project dependencies with A2A integration
+
+**Depends on:** Phase 0
+
+**Requirements:** SET-01, SET-02, SET-03
+
+**Success Criteria** (what must be TRUE):
+1. `pyproject.toml` includes `google-a2a` dependency
 2. All dependencies install without version conflicts
-3. CLI entry point `agenlang` is functional
-4. Project can be imported without errors (`import agenlang`)
+3. Project can import `from agenlang import AgentClient` (stub)
+4. A2A SDK is properly integrated
 
 **Plans:** TBD
 
 ---
 
-### Phase 1: Protocol Foundation
+### Phase 2: Identity & Semantics
 
-**Goal:** Secure agent communication with DID identity, message schema, HTTP transport, and agent discovery
+**Goal:** DID:key identity and FIPA-ACL semantics layer
 
-**Depends on:** Phase 0
+**Depends on:** Phase 1
 
-**Requirements:** ID-01, ID-02, ID-03, ID-04, ID-05, SCH-01, SCH-02, SCH-03, SCH-04, SCH-05, SCH-06, TRN-01, TRN-02, TRN-03, TRN-04, TRN-05, COR-01, COR-02, COR-03, COR-04, COR-05, COR-06, COR-07, COR-08, COR-09, CTR-01, CTR-02, DSC-01, DSC-02, DSC-03, DSC-04, DSC-05
+**Requirements:** ID-01, ID-02, ID-03, ID-04, ID-05, SCH-01, SCH-02, SCH-03, SCH-04, SCH-05, SCH-06
 
 **Success Criteria** (what must be TRUE):
 1. Agent can generate Ed25519 key pair and create did:key identifier
 2. Agent can sign messages using RFC 8785 canonicalized JSON
 3. Agent can verify incoming message signatures
-4. Agent can send/receive signed YAML messages via HTTP POST
-5. Agent Card is served at /.well-known/agent-card.json
-6. Plaintext HTTP is rejected at startup
-7. Message deduplication works via nonce + message_id
-8. BaseAgent can start, run message loop, and handle events
-9. Nonce Sentry prevents replay attacks with 24h TTL pruning
-10. mDNS local discovery finds agents on local network
-
-**Plans:** 5 plans created
-- [Plan 1: Identity Module](plans/phase1_plan1_identity.md) - Ed25519 keys, did:key format, RFC 8785 signing/verification
-- [Plan 2: Schema Module](plans/phase1_plan2_schema.md) - Message envelope, FIPA-ACL performatives, error registry
-- [Plan 3: Core Agent & Persistence](plans/phase1_plan3_core_agent.md) - BaseAgent, SQLite, message loop, Nonce Sentry
-- [Plan 4: Transport Layer](plans/phase1_plan4_transport.md) - HTTP POST, Agent Card, retry, deduplication
-- [Plan 5: Discovery](plans/phase1_plan5_discovery.md) - Agent Card schema, HTTP/mDNS discovery, caching
-
----
-
-### Phase 2: Exchange & Economy
-
-**Goal:** Multi-round CNP negotiation with Joule-based metering and atomic settlement
-
-**Depends on:** Phase 1
-
-**Requirements:** NEG-01, NEG-02, NEG-03, NEG-04, NEG-05, ECO-01, ECO-02, ECO-03, ECO-04, ECO-05, ECO-06, ECO-07, ECO-08, CTR-03
-
-**Success Criteria** (what must be TRUE):
-1. CNP state machine handles CFP → PROPOSE → ACCEPT/REJECT flow
-2. Multi-round PROPOSE ↔ PROPOSE haggling works with max-rounds limit
-3. TTL per proposal triggers auto CANCEL on expiration
-4. JouleMeter correctly calculates Joules using weighted formula
-5. Token counting via tiktoken produces consistent counts
-6. Signed Execution Record (SER) generated with all required fields
-7. Graceful divergence threshold (±5%) validates token counts
-8. Joule Garbage Collector reverts stale PENDING reservations after 30 minutes
-9. Atomic settlement occurs ONLY on COMPLETED contract state
+4. FIPA-ACL performatives properly map to A2A messages
+5. Error codes properly formatted in responses
 
 **Plans:** TBD
 
 ---
 
-### Phase 3: Bridge & CLI
+### Phase 3: Client Implementation
 
-**Goal:** MCP Bridge for consuming external servers, CLI tools, production polish
+**Goal:** Simple AgentClient class that wraps A2A with DID identity
 
 **Depends on:** Phase 2
 
-**Requirements:** BRD-01, BRD-02, BRD-03, BRD-04, BRD-05
+**Requirements:** CLI-01, CLI-02, CLI-03
 
 **Success Criteria** (what must be TRUE):
-1. MCP Client adapter can connect to external MCP servers
-2. External MCP servers wrapped as stateless AgenLang agents
-3. Wrapped agents speak signed AgenLang YAML
-4. Wrapped agents participate in CNP negotiation
-5. Wrapped agents meter Joules and produce SERs
+1. `AgentClient.request()` sends REQUEST performative via A2A
+2. `AgentClient.propose()` sends PROPOSE performative
+3. `AgentClient.accept()` / `AgentClient.reject()` for negotiation
+4. `AgentClient.inform()` sends INFORM performative
+5. All methods properly sign messages with DID key
+
+**Plans:** TBD
+
+---
+
+### Phase 4: Economy
+
+**Goal:** Joule-based metering and CNP negotiation
+
+**Depends on:** Phase 3
+
+**Requirements:** ECO-01, ECO-02, ECO-03, ECO-04, ECO-05, ECO-06, ECO-07, ECO-08, NEG-01, NEG-02, NEG-03, NEG-04, NEG-05
+
+**Success Criteria** (what must be TRUE):
+1. JouleMeter correctly calculates Joules using weighted formula
+2. Signed Execution Record (SER) generated with all required fields
+3. CNP negotiation flow works: CFP → PROPOSE → ACCEPT/REJECT
+4. Multi-round haggling with max-rounds limit
+5. TTL per proposal triggers auto CANCEL
 
 **Plans:** TBD
 
@@ -109,82 +113,59 @@
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 0. Setup | 0/1 | Not started | - |
-| 1. Protocol Foundation | 0/5 | Not started | - |
-| 2. Exchange & Economy | 0/1 | Not started | - |
-| 3. Bridge & CLI | 0/1 | Not started | - |
+| 0. Cleanup | 0/1 | Not started | - |
+| 1. Scaffolding | 0/1 | Not started | - |
+| 2. Identity & Semantics | 0/1 | Not started | - |
+| 3. Client Implementation | 0/1 | Not started | - |
+| 4. Economy | 0/1 | Not started | - |
 
 ---
 
 ## Coverage Map
 
 ```
-SET-01 → Phase 0
-SET-02 → Phase 0
-SET-03 → Phase 0
-SET-04 → Phase 3
+CLEANUP-01 → Phase 0
+CLEANUP-02 → Phase 0
+CLEANUP-03 → Phase 0
+CLEANUP-04 → Phase 0
 
-ID-01 → Phase 1
-ID-02 → Phase 1
-ID-03 → Phase 1
-ID-04 → Phase 1
-ID-05 → Phase 1
+SET-01 → Phase 1
+SET-02 → Phase 1
+SET-03 → Phase 1
 
-SCH-01 → Phase 1
-SCH-02 → Phase 1
-SCH-03 → Phase 1
-SCH-04 → Phase 1
-SCH-05 → Phase 1
-SCH-06 → Phase 1
+ID-01 → Phase 2
+ID-02 → Phase 2
+ID-03 → Phase 2
+ID-04 → Phase 2
+ID-05 → Phase 2
 
-TRN-01 → Phase 1
-TRN-02 → Phase 1
-TRN-03 → Phase 1
-TRN-04 → Phase 1
-TRN-05 → Phase 1
+SCH-01 → Phase 2
+SCH-02 → Phase 2
+SCH-03 → Phase 2
+SCH-04 → Phase 2
+SCH-05 → Phase 2
+SCH-06 → Phase 2
 
-COR-01 → Phase 1
-COR-02 → Phase 1
-COR-03 → Phase 1
-COR-04 → Phase 1
-COR-05 → Phase 1
-COR-06 → Phase 1
-COR-07 → Phase 1
-COR-08 → Phase 1
-COR-09 → Phase 1
+CLI-01 → Phase 3
+CLI-02 → Phase 3
+CLI-03 → Phase 3
 
-CTR-01 → Phase 1
-CTR-02 → Phase 1
-CTR-03 → Phase 2
+ECO-01 → Phase 4
+ECO-02 → Phase 4
+ECO-03 → Phase 4
+ECO-04 → Phase 4
+ECO-05 → Phase 4
+ECO-06 → Phase 4
+ECO-07 → Phase 4
+ECO-08 → Phase 4
 
-DSC-01 → Phase 1
-DSC-02 → Phase 1
-DSC-03 → Phase 1
-DSC-04 → Phase 1
-DSC-05 → Phase 1
-
-NEG-01 → Phase 2
-NEG-02 → Phase 2
-NEG-03 → Phase 2
-NEG-04 → Phase 2
-NEG-05 → Phase 2
-
-ECO-01 → Phase 2
-ECO-02 → Phase 2
-ECO-03 → Phase 2
-ECO-04 → Phase 2
-ECO-05 → Phase 2
-ECO-06 → Phase 2
-ECO-07 → Phase 2
-ECO-08 → Phase 2
-
-BRD-01 → Phase 3
-BRD-02 → Phase 3
-BRD-03 → Phase 3
-BRD-04 → Phase 3
-BRD-05 → Phase 3
+NEG-01 → Phase 4
+NEG-02 → Phase 4
+NEG-03 → Phase 4
+NEG-04 → Phase 4
+NEG-05 → Phase 4
 ```
 
 ---
 
-*Roadmap generated: 2026-03-11*
+*Roadmap updated: 2026-03-12 - Revised for A2A-based architecture*

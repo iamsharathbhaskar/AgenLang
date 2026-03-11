@@ -10,7 +10,7 @@ import aiosqlite
 import httpx
 from zeroconf import Zeroconf, ServiceInfo, ServiceListener
 
-from agenlang.schema import AgentCard as SchemaAgentCard
+from agenlang.schema import AgentCard
 from agenlang.identity import canonicalize_for_signing
 
 
@@ -146,10 +146,7 @@ class AgentDiscovery:
             self._zeroconf.close()
 
 
-class AgentCard(SchemaAgentCard):
-    """Agent Card - self-describing document for discovery."""
-
-    pass
+# AgentCard is imported from schema module - no local definition needed
 
 
 def sign_agent_card(card: AgentCard, private_key: "ed25519.Ed25519PrivateKey") -> AgentCard:
