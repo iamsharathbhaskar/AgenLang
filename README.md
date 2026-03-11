@@ -1,15 +1,14 @@
 # AgenLang
 
-Agent-to-Agent communication protocol with DID identity, signed YAML messages, CNP negotiation, and Joule-based metering.
+A semantics layer on top of Google's A2A protocol — adding DID identity, FIPA-ACL semantics, and Joule-based metering.
 
-## Features
+## What is AgenLang?
 
-- **DID Identity**: Ed25519 key pairs with did:key identifiers
-- **Signed YAML Messages**: RFC 8785 canonicalization for cross-platform signatures
-- **FIPA-ACL Performatives**: REQUEST, PROPOSE, ACCEPT-PROPOSAL, REJECT-PROPOSAL, INFORM, AGREE, REFUSE, FAILURE, CANCEL, CFP, NOT_UNDERSTOOD
-- **CNP Negotiation**: Contract Net Protocol with multi-round haggling
-- **Joule-based Metering**: Token-weighted computation metering with Signed Execution Records
-- **HTTP/mDNS Discovery**: Agent Card-based discovery
+AgenLang provides a clean Python library for AI agents to communicate with each other. It sits on top of the A2A (Agent-to-Agent) protocol and adds:
+
+- **DID Identity**: Cryptographic identity using `did:key` format
+- **FIPA-ACL Semantics**: Well-defined message performatives (REQUEST, PROPOSE, ACCEPT-PROPOSAL, etc.)
+- **Joule Metering**: Verifiable compute metering with Signed Execution Records
 
 ## Installation
 
@@ -17,53 +16,75 @@ Agent-to-Agent communication protocol with DID identity, signed YAML messages, C
 pip install agenlang
 ```
 
-## Development Installation
-
-```bash
-pip install -e ".[dev]"
-```
-
 ## Quick Start
 
 ```python
-from agenlang import BaseAgent
+from agenlang import AgentClient, Identity
 
-# Create your agent
-class MyAgent(BaseAgent):
-    async def on_message(self, message):
-        pass
-    
-    async def on_request(self, message):
-        return {"result": "handled"}
-    
-    async def on_propose(self, message):
-        return {"accepted": True}
-    
-    async def on_inform(self, message):
-        pass
+# Load or create your agent identity
+identity = Identity.load("my-agent")
 
-# Run the agent
-agent = MyAgent(agent_id="my-agent", did="did:key:...", transport=http_transport)
-await agent.start()
+# Create client
+client = AgentClient(did=identity.did, identity=identity)
+
+# Call another agent
+result = await client.request(
+    to="did:key:z6Mh...",
+    action="summarize",
+    payload={"text": "your text here"}
+)
+
+# Or negotiate with pricing
+proposal = await client.propose(
+    to="did:key:z6Mh...",
+    action="process",
+    payload={"data": "..."},
+    pricing={"base_joules": 15, "per_1k_tokens": 2.5}
+)
 ```
 
 ## CLI Usage
 
 ```bash
-# Start an agent
-agenlang start --config ~/.agenlang/myagent.yaml
+# Show your agent identity
+agenlang identity
 
-# Discover agents
-agenlang discover
+# Call another agent
+agenlang call did:key:z6Mk... summarize '{"text": "hello"}'
 
-# Inspect contract chain
-agenlang inspect <trace_id>
+# Discover agent capabilities
+agenlang discover https://agent.example.com
+```
+
+## Key Features
+
+| Feature | Description |
+|---------|-------------|
+| DID Identity | Ed25519 keys with did:key format |
+| RFC 8785 Signing | Cross-platform cryptographic signatures |
+| FIPA-ACL | REQUEST, PROPOSE, ACCEPT-PROPOSAL, INFORM, etc. |
+| Joule Metering | Token-weighted compute tracking |
+| CNP Negotiation | Multi-round haggling with TTL |
+
+## Architecture
+
+```
+┌─────────────────────────────────────┐
+│  FIPA-ACL Semantics Layer          │
+│  (REQUEST, PROPOSE, ACCEPT, etc.)  │
+├─────────────────────────────────────┤
+│  DID Identity Layer                │
+│  (Ed25519, RFC 8785 signing)       │
+├─────────────────────────────────────┤
+│  A2A Transport                     │
+│  (HTTP, JSON-RPC, Agent Cards)     │
+└─────────────────────────────────────┘
 ```
 
 ## Requirements
 
 - Python 3.11+
-- See `pyproject.toml` for full dependencies
+- See `pyproject.toml` for dependencies
 
 ## License
 
