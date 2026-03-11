@@ -54,7 +54,12 @@
 9. Nonce Sentry prevents replay attacks with 24h TTL pruning
 10. mDNS local discovery finds agents on local network
 
-**Plans:** TBD
+**Plans:** 5 plans created
+- [Plan 1: Identity Module](plans/phase1_plan1_identity.md) - Ed25519 keys, did:key format, RFC 8785 signing/verification
+- [Plan 2: Schema Module](plans/phase1_plan2_schema.md) - Message envelope, FIPA-ACL performatives, error registry
+- [Plan 3: Core Agent & Persistence](plans/phase1_plan3_core_agent.md) - BaseAgent, SQLite, message loop, Nonce Sentry
+- [Plan 4: Transport Layer](plans/phase1_plan4_transport.md) - HTTP POST, Agent Card, retry, deduplication
+- [Plan 5: Discovery](plans/phase1_plan5_discovery.md) - Agent Card schema, HTTP/mDNS discovery, caching
 
 ---
 
@@ -105,7 +110,7 @@
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 0. Setup | 0/1 | Not started | - |
-| 1. Protocol Foundation | 0/1 | Not started | - |
+| 1. Protocol Foundation | 0/5 | Not started | - |
 | 2. Exchange & Economy | 0/1 | Not started | - |
 | 3. Bridge & CLI | 0/1 | Not started | - |
 

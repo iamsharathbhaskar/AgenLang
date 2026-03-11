@@ -6,12 +6,12 @@ See: .planning/PROJECT.md (updated 2026-03-11)
 
 **Core value:** A universal, secure protocol for agent-to-agent communication with cryptographically verified identity (DID), trustworthy negotiation, and transparent micro-settlements — enabling a decentralized agent economy.
 
-**Current focus:** Phase 0: Setup
+**Current focus:** Phase 1: Protocol Foundation
 
 ## Current Position
 
-Phase: 0 of 4 (Setup)
-Plan: 0 of 1 in current phase
+Phase: 1 of 4 (Protocol Foundation)
+Plan: 0 of 5 in current phase
 Status: Ready to plan
 Last activity: 2026-03-11 — Roadmap created
 
@@ -29,7 +29,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 0. Setup | 0/1 | - | - |
-| 1. Protocol Foundation | 0/1 | - | - |
+| 1. Protocol Foundation | 0/5 | - | - |
 | 2. Exchange & Economy | 0/1 | - | - |
 | 3. Bridge & CLI | 0/1 | - | - |
 
