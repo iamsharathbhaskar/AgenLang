@@ -49,3 +49,7 @@ venv/
 # Testing (keep tests/ directory, but not temp files)
 test_*.py
 *_test.py
+
+# Planning (internal - do not share)
+.planning/
+AgenLang_GSD_Build_Plan.md
